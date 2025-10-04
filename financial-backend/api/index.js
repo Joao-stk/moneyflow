@@ -3,6 +3,25 @@ const cors = require('cors');
 
 const app = express();
 
+// ✅ CONFIGURAÇÃO CORS CORRIGIDA
+app.use(cors({
+  origin: [
+    'https://moneyflow-jb3b.vercel.app',    // SEU frontend no Vercel
+    'https://moneyflow-frontend.vercel.app', // Possível outro domínio
+    'http://localhost:5173'                  // Desenvolvimento
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  optionsSuccessStatus: 200
+}));
+
+// ✅ Middleware para OPTIONS (preflight)
+app.options('*', cors());
+
+// Resto do seu código...
+app.use(express.json());
+
 // Error handling para inicialização
 let prisma;
 try {
@@ -12,19 +31,6 @@ try {
 } catch (error) {
   console.error('❌ Prisma Client failed:', error.message);
 }
-
-// Middlewares
-app.use(cors({
-  origin: [
-    'https://moneyflow-frontend.vercel.app',
-    'http://localhost:5173'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-app.use(express.json());
 
 // Middleware para injetar prisma
 app.use((req, res, next) => {
@@ -37,7 +43,8 @@ app.get('/', (req, res) => {
   res.json({ 
     status: 'SUCCESS', 
     message: '🚀 MoneyFlow Backend Online',
-    database: prisma ? '✅ Connected' : '❌ Disconnected'
+    database: prisma ? '✅ Connected' : '❌ Disconnected',
+    cors: '✅ Configured for frontend'
   });
 });
 
@@ -45,9 +52,16 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: '✅ Health Check Passed' });
 });
 
-// ✅ ADICIONE ESTAS ROTAS AQUI:
+// ✅ ADICIONE HEADERS MANUALMENTE PARA TODAS AS ROTAS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://moneyflow-jb3b.vercel.app');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
 
-// Auth routes
+// Suas rotas de auth (mantenha as que você já tem)
 app.post('/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -56,7 +70,6 @@ app.post('/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     }
 
-    // Verificar se usuário existe
     const existingUser = await req.prisma.user.findUnique({
       where: { email }
     });
@@ -65,11 +78,9 @@ app.post('/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Usuário já cadastrado' });
     }
 
-    // Hash da senha (simplificado - adicione bcrypt depois)
     const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Criar usuário
     const user = await req.prisma.user.create({
       data: {
         name,
@@ -102,7 +113,6 @@ app.post('/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    // Buscar usuário
     const user = await req.prisma.user.findUnique({
       where: { email }
     });
@@ -111,7 +121,6 @@ app.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
-    // Verificar senha (simplificado)
     const bcrypt = require('bcryptjs');
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
@@ -119,7 +128,6 @@ app.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
-    // Gerar token JWT
     const jwt = require('jsonwebtoken');
     const token = jwt.sign(
       { userId: user.id, email: user.email },
