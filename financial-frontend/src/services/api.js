@@ -1,13 +1,14 @@
 import axios from 'axios'
 
-const API_URL = 'http://localhost:3000'
+// ✅ URL CORRETA do backend no Vercel
+const API_URL = import.meta.env.VITE_API_URL || 'https://moneyflow-nine.vercel.app'
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000, // 10 segundos
+  timeout: 10000,
 })
 
-// Interceptor para adicionar token automaticamente
+// Interceptor para adicionar token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {
@@ -50,9 +51,8 @@ export const transactionsAPI = {
 
 export const summaryAPI = {
   getSummary: (params = {}) => 
-    api.get('/summary', { params }), // Agora aceita parâmetros
-};
-// ... outras APIs
+    api.get('/summary', { params }),
+}
 
 export const layoutAPI = {
   saveLayout: (layouts) => 
@@ -60,6 +60,6 @@ export const layoutAPI = {
   
   getLayout: () => 
     api.get('/layout'),
-};
+}
 
 export default api
