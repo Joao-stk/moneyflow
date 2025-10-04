@@ -3,23 +3,48 @@ const cors = require('cors');
 
 const app = express();
 
-// ✅ CONFIGURAÇÃO CORS CORRIGIDA
-app.use(cors({
+// ✅ CONFIGURAÇÃO CORS ROBUSTA
+const corsOptions = {
   origin: [
-    'https://moneyflow-jb3b.vercel.app',    // SEU frontend no Vercel
-    'https://moneyflow-frontend.vercel.app', // Possível outro domínio
-    'http://localhost:5173'                  // Desenvolvimento
+    'https://moneyflow-jb3b.vercel.app',
+    'https://moneyflow-frontend.vercel.app',
+    'http://localhost:5173'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   optionsSuccessStatus: 200
-}));
+};
 
-// ✅ Middleware para OPTIONS (preflight)
-app.options('*', cors());
+// Aplica CORS para TODAS as rotas
+app.use(cors(corsOptions));
 
-// Resto do seu código...
+// ✅ MIDDLEWARE MANUAL para garantir CORS
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://moneyflow-jb3b.vercel.app',
+    'https://moneyflow-frontend.vercel.app',
+    'http://localhost:5173'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  
+  // ✅ RESPONDE IMEDIATAMENTE para OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
 app.use(express.json());
 
 // Error handling para inicialização
@@ -44,26 +69,39 @@ app.get('/', (req, res) => {
     status: 'SUCCESS', 
     message: '🚀 MoneyFlow Backend Online',
     database: prisma ? '✅ Connected' : '❌ Disconnected',
-    cors: '✅ Configured for frontend'
+    cors: '✅ Configured'
   });
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: '✅ Health Check Passed' });
+  res.json({ 
+    status: 'OK', 
+    message: '✅ Health Check Passed',
+    timestamp: new Date().toISOString()
+  });
 });
 
-// ✅ ADICIONE HEADERS MANUALMENTE PARA TODAS AS ROTAS
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://moneyflow-jb3b.vercel.app');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  next();
+// ✅ ROTA ESPECÍFICA para OPTIONS do /auth/login
+app.options('/auth/login', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', 'https://moneyflow-jb3b.vercel.app');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.status(200).end();
 });
 
-// Suas rotas de auth (mantenha as que você já tem)
+// ✅ ROTA ESPECÍFICA para OPTIONS do /auth/register
+app.options('/auth/register', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', 'https://moneyflow-jb3b.vercel.app');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.status(200).end();
+});
+
+// Auth routes
 app.post('/auth/register', async (req, res) => {
   try {
+    console.log('📝 Register attempt:', req.body.email);
+    
     const { name, email, password } = req.body;
     
     if (!name || !email || !password) {
@@ -95,18 +133,22 @@ app.post('/auth/register', async (req, res) => {
       }
     });
 
+    console.log('✅ User registered:', user.email);
+    
     res.status(201).json({
       message: 'Usuário criado com sucesso',
       user
     });
   } catch (error) {
-    console.error('Erro no registro:', error);
+    console.error('❌ Erro no registro:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
 app.post('/auth/login', async (req, res) => {
   try {
+    console.log('🔐 Login attempt:', req.body.email);
+    
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -118,6 +160,7 @@ app.post('/auth/login', async (req, res) => {
     });
 
     if (!user) {
+      console.log('❌ User not found:', email);
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
@@ -125,6 +168,7 @@ app.post('/auth/login', async (req, res) => {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
+      console.log('❌ Invalid password for:', email);
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
@@ -135,6 +179,8 @@ app.post('/auth/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
+    console.log('✅ Login successful:', user.email);
+    
     res.json({
       message: 'Login realizado com sucesso',
       token,
@@ -145,7 +191,7 @@ app.post('/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Erro no login:', error);
+    console.error('❌ Erro no login:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -167,4 +213,5 @@ app.use('*', (req, res) => {
   });
 });
 
+console.log('🔄 Server started with CORS configured');
 module.exports = app;
