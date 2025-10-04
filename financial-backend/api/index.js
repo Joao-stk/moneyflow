@@ -3,6 +3,16 @@ const cors = require('cors');
 
 const app = express();
 
+// Error handling para inicialização
+let prisma;
+try {
+  const { PrismaClient } = require('@prisma/client');
+  prisma = new PrismaClient();
+  console.log('✅ Prisma Client loaded successfully');
+} catch (error) {
+  console.error('❌ Prisma Client failed:', error.message);
+}
+
 // Middlewares
 app.use(cors({
   origin: [
@@ -18,30 +28,49 @@ app.use(express.json());
 app.get('/', (req, res) => {
   res.json({ 
     status: 'SUCCESS', 
-    message: 'MoneyFlow Backend Online! 🚀',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'production'
+    message: '🚀 MoneyFlow Backend Online',
+    database: prisma ? '✅ Connected' : '❌ Disconnected',
+    timestamp: new Date().toISOString()
   });
 });
 
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
-    message: '✅ Health Check Passed',
-    version: '1.0.0'
+    message: '✅ Health Check Passed'
   });
 });
 
-// Rota catch-all para debugging
-app.get('*', (req, res) => {
-  res.json({ 
-    message: 'Rota capturada pelo Express',
-    path: req.path,
-    method: req.method,
-    query: req.query,
-    timestamp: new Date().toISOString()
+// Rota que testa o banco
+app.get('/test-db', async (req, res) => {
+  if (!prisma) {
+    return res.status(500).json({ 
+      error: 'Database not available'
+    });
+  }
+
+  try {
+    const userCount = await prisma.user.count();
+    res.json({ 
+      database: '✅ Working', 
+      userCount,
+      message: 'Database connection successful' 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      database: '❌ Error', 
+      error: error.message
+    });
+  }
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('❌ Server Error:', err);
+  res.status(500).json({ 
+    error: 'Internal Server Error',
+    message: err.message 
   });
 });
 
 module.exports = app;
-EOF
