@@ -1,4 +1,6 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 
@@ -18,21 +20,30 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// ✅ HEALTH CHECK E ROTA RAIZ
+// ✅ CONEXÃO COM BANCO REAL
+let prisma;
+try {
+  const { PrismaClient } = require('@prisma/client');
+  prisma = new PrismaClient();
+  console.log('✅ Prisma Client connected to PostgreSQL');
+} catch (error) {
+  console.error('❌ Prisma Client failed:', error.message);
+  process.exit(1);
+}
+
+// ✅ MIDDLEWARE PARA INJETAR PRISMA
+app.use((req, res, next) => {
+  req.prisma = prisma;
+  next();
+});
+
+// ✅ HEALTH CHECK
 app.get('/', (req, res) => {
   res.json({ 
     status: 'SUCCESS', 
     message: '🚀 MoneyFlow API Online',
-    version: '1.0.0',
-    timestamp: new Date().toISOString(),
-    endpoints: [
-      '/health',
-      '/auth/login',
-      '/auth/register',
-      '/transactions',
-      '/summary',
-      '/layout'
-    ]
+    database: '✅ PostgreSQL Connected',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -44,36 +55,62 @@ app.get('/health', (req, res) => {
   });
 });
 
-// ✅ AUTH ROUTES
+// ✅ REGISTRO REAL COM BANCO
 app.post('/auth/register', async (req, res) => {
   try {
     console.log('📝 Register attempt:', req.body.email);
     
     const { name, email, password } = req.body;
     
+    // Validações
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     }
 
-    // Mock response - usuário criado com sucesso
-    const jwt = require('jsonwebtoken');
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
+    }
+
+    // Verificar se usuário já existe
+    const existingUser = await req.prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'Usuário já cadastrado' });
+    }
+
+    // Hash da senha
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Criar usuário no banco
+    const user = await req.prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true
+      }
+    });
+
+    // Gerar token JWT
     const token = jwt.sign(
-      { userId: Date.now(), email: email },
-      process.env.JWT_SECRET || 'fallback-secret-123',
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    console.log('✅ User registered:', email);
+    console.log('✅ User registered successfully:', user.email);
     
     res.status(201).json({
       message: 'Usuário criado com sucesso',
       token,
-      user: {
-        id: Date.now(),
-        name: name,
-        email: email,
-        createdAt: new Date().toISOString()
-      }
+      user
     });
 
   } catch (error) {
@@ -82,36 +119,52 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
+// ✅ LOGIN REAL COM BANCO
 app.post('/auth/login', async (req, res) => {
   try {
     console.log('🔐 Login attempt:', req.body.email);
     
     const { email, password } = req.body;
 
+    // Validações
     if (!email || !password) {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    console.log('📧 Processing login for:', email);
+    // Buscar usuário no banco
+    const user = await req.prisma.user.findUnique({
+      where: { email }
+    });
 
-    // ✅ MOCK LOGIN - funciona com qualquer email/senha para teste
-    // Na versão final, substitua por verificação real no banco
-    const jwt = require('jsonwebtoken');
+    if (!user) {
+      console.log('❌ User not found:', email);
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    // Verificar senha
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      console.log('❌ Invalid password for:', email);
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    // Gerar token JWT
     const token = jwt.sign(
-      { userId: 1, email: email },
-      process.env.JWT_SECRET || 'fallback-secret-123',
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    console.log('✅ Login successful:', email);
+    console.log('✅ Login successful:', user.email);
     
     res.json({
       message: 'Login realizado com sucesso',
       token,
       user: {
-        id: 1,
-        name: 'Usuário Demo',
-        email: email
+        id: user.id,
+        name: user.name,
+        email: user.email
       }
     });
 
@@ -121,7 +174,7 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// ✅ MIDDLEWARE DE AUTENTICAÇÃO SIMPLES
+// ✅ MIDDLEWARE DE AUTENTICAÇÃO
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   
@@ -130,8 +183,7 @@ const authMiddleware = (req, res, next) => {
   }
 
   try {
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret-123');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
@@ -139,112 +191,261 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// ✅ TRANSACTIONS ROUTES (PROTEGIDAS)
-app.get('/transactions', authMiddleware, (req, res) => {
-  console.log('📊 Fetching transactions for user:', req.user.userId);
-  
-  // Mock data - substitua por dados reais do banco depois
-  res.json({
-    transactions: [
-      {
-        id: 1,
-        value: 150.50,
-        type: 'income',
-        category: 'salary',
-        description: 'Salário',
-        date: new Date().toISOString()
-      },
-      {
-        id: 2,
-        value: 45.00,
-        type: 'expense', 
-        category: 'food',
-        description: 'Almoço',
-        date: new Date().toISOString()
+// ✅ TRANSACTIONS ROUTES (REAIS)
+app.get('/transactions', authMiddleware, async (req, res) => {
+  try {
+    const { page = 1, limit = 10, type, category } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const where = { userId: req.user.userId };
+    if (type) where.type = type;
+    if (category) where.category = category;
+
+    const transactions = await req.prisma.transaction.findMany({
+      where,
+      orderBy: { date: 'desc' },
+      skip,
+      take: parseInt(limit)
+    });
+
+    const total = await req.prisma.transaction.count({ where });
+
+    res.json({
+      transactions,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
       }
-    ],
-    pagination: {
-      page: 1,
-      limit: 10,
-      total: 2,
-      pages: 1
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar transações:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+app.post('/transactions', authMiddleware, async (req, res) => {
+  try {
+    const { value, type, category, description, date } = req.body;
+
+    // Validações
+    if (!value || !type || !category) {
+      return res.status(400).json({ error: 'Valor, tipo e categoria são obrigatórios' });
     }
-  });
-});
 
-app.post('/transactions', authMiddleware, (req, res) => {
-  console.log('➕ Creating transaction:', req.body);
-  
-  // Mock response - transação criada
-  res.status(201).json({
-    message: 'Transação criada com sucesso',
-    transaction: {
-      id: Date.now(),
-      ...req.body,
-      date: new Date().toISOString()
+    if (!['income', 'expense'].includes(type)) {
+      return res.status(400).json({ error: 'Tipo deve ser income ou expense' });
     }
+
+    const validCategories = {
+      income: ['salary', 'freelance', 'investment', 'gift', 'others'],
+      expense: ['food', 'transport', 'leisure', 'health', 'education', 'shopping', 'bills', 'others']
+    };
+
+    if (!validCategories[type].includes(category)) {
+      return res.status(400).json({ error: 'Categoria inválida' });
+    }
+
+    const transaction = await req.prisma.transaction.create({
+      data: {
+        value: parseFloat(value),
+        type,
+        category,
+        description: description || '',
+        date: date ? new Date(date) : new Date(),
+        userId: req.user.userId
+      }
+    });
+
+    console.log('✅ Transaction created:', transaction.id);
+    
+    res.status(201).json({
+      message: 'Transação criada com sucesso',
+      transaction
+    });
+  } catch (error) {
+    console.error('❌ Erro ao criar transação:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+app.delete('/transactions/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Verificar se a transação pertence ao usuário
+    const transaction = await req.prisma.transaction.findFirst({
+      where: { 
+        id: parseInt(id), 
+        userId: req.user.userId 
+      }
+    });
+
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transação não encontrada' });
+    }
+
+    await req.prisma.transaction.delete({
+      where: { id: parseInt(id) }
+    });
+
+    console.log('✅ Transaction deleted:', id);
+    
+    res.json({ message: 'Transação deletada com sucesso' });
+  } catch (error) {
+    console.error('❌ Erro ao deletar transação:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// ✅ SUMMARY ROUTE (REAL)
+app.get('/summary', authMiddleware, async (req, res) => {
+  try {
+    const { period = 'month' } = req.query;
+
+    // Calcular datas baseadas no período
+    const now = new Date();
+    let startDate, endDate;
+
+    if (period === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else if (period === 'year') {
+      startDate = new Date(now.getFullYear(), 0, 1);
+      endDate = new Date(now.getFullYear(), 11, 31);
+    }
+
+    const where = { 
+      userId: req.user.userId,
+      date: {
+        gte: startDate,
+        lte: endDate
+      }
+    };
+
+    // Buscar transações
+    const transactions = await req.prisma.transaction.findMany({
+      where,
+      select: {
+        value: true,
+        type: true
+      }
+    });
+
+    // Calcular totais
+    const totalIncome = transactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    const totalExpense = transactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    const balance = totalIncome - totalExpense;
+
+    // Calcular por categoria
+    const transactionsByCategory = await req.prisma.transaction.groupBy({
+      by: ['category', 'type'],
+      where,
+      _sum: {
+        value: true
+      },
+      _count: {
+        _all: true
+      }
+    });
+
+    res.json({
+      summary: {
+        balance,
+        totalIncome,
+        totalExpense,
+        transactionCount: transactions.length,
+        period
+      },
+      byCategory: transactionsByCategory
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar resumo:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// ✅ LAYOUT ROUTES (REAIS)
+app.post('/layout', authMiddleware, async (req, res) => {
+  try {
+    const { layouts } = req.body;
+
+    // Salvar cada tamanho de tela
+    for (const [screenSize, layout] of Object.entries(layouts)) {
+      await req.prisma.dashboardLayout.upsert({
+        where: {
+          userId_screenSize: {
+            userId: req.user.userId,
+            screenSize
+          }
+        },
+        update: {
+          layout: JSON.stringify(layout)
+        },
+        create: {
+          layout: JSON.stringify(layout),
+          screenSize,
+          userId: req.user.userId
+        }
+      });
+    }
+
+    res.json({ message: 'Layout salvo com sucesso' });
+  } catch (error) {
+    console.error('❌ Erro ao salvar layout:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+app.get('/layout', authMiddleware, async (req, res) => {
+  try {
+    const layouts = await req.prisma.dashboardLayout.findMany({
+      where: { userId: req.user.userId },
+      select: {
+        screenSize: true,
+        layout: true
+      }
+    });
+
+    const formattedLayouts = {};
+    layouts.forEach(item => {
+      try {
+        formattedLayouts[item.screenSize] = JSON.parse(item.layout);
+      } catch (error) {
+        formattedLayouts[item.screenSize] = [];
+      }
+    });
+
+    res.json({ layouts: formattedLayouts });
+  } catch (error) {
+    console.error('❌ Erro ao carregar layout:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// ✅ ERROR HANDLER
+app.use((err, req, res, next) => {
+  console.error('💥 GLOBAL ERROR:', err);
+  res.status(500).json({ 
+    error: 'Internal Server Error',
+    message: err.message 
   });
 });
 
-app.delete('/transactions/:id', authMiddleware, (req, res) => {
-  console.log('🗑️ Deleting transaction:', req.params.id);
-  
-  res.json({ message: 'Transação deletada com sucesso' });
-});
-
-// ✅ SUMMARY ROUTE (PROTEGIDA)
-app.get('/summary', authMiddleware, (req, res) => {
-  console.log('📈 Fetching summary for user:', req.user.userId);
-  
-  // Mock data - substitua por cálculo real depois
-  res.json({
-    summary: {
-      balance: 105.50,
-      totalIncome: 150.50,
-      totalExpense: 45.00,
-      transactionCount: 2
-    },
-    byCategory: [
-      { category: 'salary', type: 'income', _sum: { value: 150.50 }, _count: { _all: 1 } },
-      { category: 'food', type: 'expense', _sum: { value: 45.00 }, _count: { _all: 1 } }
-    ]
-  });
-});
-
-// ✅ LAYOUT ROUTES (PROTEGIDAS)
-app.post('/layout', authMiddleware, (req, res) => {
-  console.log('💾 Saving layout for user:', req.user.userId);
-  
-  res.json({ message: 'Layout salvo com sucesso' });
-});
-
-app.get('/layout', authMiddleware, (req, res) => {
-  console.log('📋 Loading layout for user:', req.user.userId);
-  
-  // Mock empty layout
-  res.json({ layouts: {} });
-});
-
-// ✅ 404 HANDLER - Mantenha no final
+// ✅ 404 HANDLER
 app.use('*', (req, res) => {
-  console.log('❌ Route not found:', req.originalUrl);
   res.status(404).json({ 
     error: 'Rota não encontrada',
-    path: req.originalUrl,
-    availableEndpoints: [
-      'GET /',
-      'GET /health', 
-      'POST /auth/login',
-      'POST /auth/register',
-      'GET /transactions (auth)',
-      'POST /transactions (auth)',
-      'DELETE /transactions/:id (auth)',
-      'GET /summary (auth)',
-      'GET /layout (auth)',
-      'POST /layout (auth)'
-    ]
+    path: req.originalUrl 
   });
 });
 
-console.log('🚀 MoneyFlow Server started with all routes');
+console.log('🚀 MoneyFlow Server started with REAL database');
 module.exports = app;
