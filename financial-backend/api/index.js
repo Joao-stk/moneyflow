@@ -446,6 +446,5 @@ app.use('*', (req, res) => {
     path: req.originalUrl 
   });
 });
-
 console.log('🚀 MoneyFlow Server started with REAL database');
 module.exports = app;
