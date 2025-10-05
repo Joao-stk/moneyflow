@@ -1,3 +1,17 @@
+// 🔧 FORCE SCHEMA PUBLIC - ADICIONE ISSO NA PRIMEIRA LINHA
+const originalUrl = process.env.DATABASE_URL;
+if (originalUrl && !originalUrl.includes('schema=')) {
+  process.env.DATABASE_URL = originalUrl.includes('?') 
+    ? originalUrl + '&schema=public'
+    : originalUrl + '?schema=public';
+}
+console.log('🔧 Database URL modified to include schema=public');
+
+// SEU CÓDIGO ORIGINAL AQUI...
+const express = require('express');
+const bcrypt = require('bcryptjs');
+// ... resto do código
+
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
