@@ -21,13 +21,13 @@ model User {
   transactions Transaction[]
   dashboardLayout DashboardLayout[]
 
-  @@map("user")  // Isso mapeia para a tabela "user" em lowercase
+  @@map("user")  // Mapeia para a tabela "user"
 }
 
 model Transaction {
   id          Int      @id @default(autoincrement())
   value       Float
-  type        String   // 'income' ou 'expense'
+  type        String
   category    String
   description String
   date        DateTime
@@ -36,16 +36,19 @@ model Transaction {
   
   userId Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transaction")  // Mapeia para a tabela "transaction"
 }
 
 model DashboardLayout {
   id        Int      @id @default(autoincrement())
-  layout    String   // JSON string com o layout
-  screenSize String  // 'lg', 'md', 'sm'
+  layout    String
+  screenSize String
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, screenSize])
+  @@map("dashboard_layout")  // Mapeia para a tabela "dashboard_layout"
 }
