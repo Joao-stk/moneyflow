@@ -67,7 +67,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// ✅ 6. REGISTRO
+// ✅ 6. REGISTRO (COM SQL DIRETO)
 app.post('/auth/register', async (req, res) => {
   try {
     console.log('📝 Register attempt:', req.body.email);
@@ -82,9 +82,11 @@ app.post('/auth/register', async (req, res) => {
       return res.status(500).json({ error: 'Database não disponível' });
     }
 
-    const existingUser = await req.prisma.user.findUnique({
-      where: { email }
-    });
+    // ✅ SQL DIRETO - Verificar se usuário existe
+    const existingUsers = await req.prisma.$queryRaw`
+      SELECT * FROM "user" WHERE email = ${email}
+    `;
+    const existingUser = existingUsers[0] || null;
 
     if (existingUser) {
       return res.status(400).json({ error: 'Usuário já cadastrado' });
@@ -92,19 +94,13 @@ app.post('/auth/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const user = await req.prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        createdAt: true
-      }
-    });
+    // ✅ SQL DIRETO - Criar usuário
+    const newUsers = await req.prisma.$queryRaw`
+      INSERT INTO "user" (name, email, password, "createdAt", "updatedAt") 
+      VALUES (${name}, ${email}, ${hashedPassword}, NOW(), NOW())
+      RETURNING id, name, email, "createdAt"
+    `;
+    const user = newUsers[0];
 
     const token = jwt.sign(
       { userId: user.id, email: user.email },
@@ -126,7 +122,7 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-// ✅ 7. LOGIN
+// ✅ 7. LOGIN (COM SQL DIRETO)
 app.post('/auth/login', async (req, res) => {
   try {
     console.log('🔐 Login attempt:', req.body.email);
@@ -141,9 +137,11 @@ app.post('/auth/login', async (req, res) => {
       return res.status(500).json({ error: 'Database não disponível' });
     }
 
-    const user = await req.prisma.user.findUnique({
-      where: { email }
-    });
+    // ✅ SQL DIRETO - Buscar usuário
+    const users = await req.prisma.$queryRaw`
+      SELECT * FROM "user" WHERE email = ${email}
+    `;
+    const user = users[0] || null;
 
     if (!user) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
