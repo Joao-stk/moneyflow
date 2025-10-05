@@ -7,11 +7,6 @@ if (originalUrl && !originalUrl.includes('schema=')) {
 }
 console.log('🔧 Database URL modified to include schema=public');
 
-// SEU CÓDIGO ORIGINAL AQUI...
-const express = require('express');
-const bcrypt = require('bcryptjs');
-// ... resto do código
-
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
