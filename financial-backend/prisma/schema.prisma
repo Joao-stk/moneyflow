@@ -20,6 +20,8 @@ model User {
   
   transactions Transaction[]
   dashboardLayout DashboardLayout[]
+
+  @@map("user")  // Isso mapeia para a tabela "user" em lowercase
 }
 
 model Transaction {
