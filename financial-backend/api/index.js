@@ -1,11 +1,11 @@
-// 🔧 FORCE SCHEMA PUBLIC - ADICIONE ISSO NA PRIMEIRA LINHA
+// 🔧 FORCE SCHEMA PUBLIC - CORRIGIDO E MELHORADO
 const originalUrl = process.env.DATABASE_URL;
 if (originalUrl && !originalUrl.includes('schema=')) {
-  process.env.DATABASE_URL = originalUrl.includes('?') 
-    ? originalUrl + '&schema=public'
-    : originalUrl + '?schema=public';
+  // Corrige a lógica para evitar duplicação de parâmetros
+  const separator = originalUrl.includes('?') ? '&' : '?';
+  process.env.DATABASE_URL = `${originalUrl}${separator}schema=public`;
 }
-console.log('🔧 Database URL modified to include schema=public');
+console.log('🔧 Database URL configured');
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
@@ -13,11 +13,22 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 
-// ✅ 1. CORS CONFIGURATION
+// ✅ 1. CORS CONFIGURATION - MELHORADO
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://finfly.vercel.app');
+  const allowedOrigins = [
+    'https://finfly.vercel.app',
+    'https://finfly-nine.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.header('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
@@ -29,29 +40,46 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// ✅ 2. CONEXÃO COM BANCO
+// ✅ 2. CONEXÃO COM BANCO - COM TRATAMENTO MELHORADO
 let prisma;
-try {
-  const { PrismaClient } = require('@prisma/client');
-  prisma = new PrismaClient();
-  console.log('✅ Prisma Client connected to PostgreSQL');
-} catch (error) {
-  console.error('❌ Prisma Client failed:', error.message);
-}
+let isDatabaseConnected = false;
 
-// ✅ 3. MIDDLEWARE PARA INJETAR PRISMA
+const initializePrisma = async () => {
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    prisma = new PrismaClient({
+      log: ['error'], // Apenas logs de erro em produção
+    });
+    
+    // Testa a conexão
+    await prisma.$queryRaw`SELECT 1`;
+    isDatabaseConnected = true;
+    console.log('✅ Prisma Client connected to PostgreSQL');
+  } catch (error) {
+    console.error('❌ Prisma Client failed:', error.message);
+    isDatabaseConnected = false;
+  }
+};
+
+initializePrisma();
+
+// ✅ 3. MIDDLEWARE PARA INJETAR PRISMA - COM VALIDAÇÃO
 app.use((req, res, next) => {
+  if (!isDatabaseConnected) {
+    return res.status(503).json({ error: 'Serviço de banco de dados indisponível' });
+  }
   req.prisma = prisma;
   next();
 });
 
-// ✅ 4. ROTA RAIZ
+// ✅ 4. ROTA RAIZ - ATUALIZADA
 app.get('/', (req, res) => {
   res.json({ 
     status: 'SUCCESS', 
     message: '🚀 Finfly API Online',
-    database: prisma ? '✅ Connected' : '❌ Disconnected',
+    database: isDatabaseConnected ? '✅ Connected' : '❌ Disconnected',
     timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
     endpoints: [
       'GET /',
       'GET /health',
@@ -67,37 +95,50 @@ app.get('/', (req, res) => {
   });
 });
 
-// ✅ 5. HEALTH CHECK
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+// ✅ 5. HEALTH CHECK - MELHORADO
+app.get('/health', async (req, res) => {
+  const healthCheck = {
+    status: 'OK',
     message: '✅ Server is healthy',
-    timestamp: new Date().toISOString()
-  });
+    timestamp: new Date().toISOString(),
+    database: isDatabaseConnected ? 'healthy' : 'unhealthy',
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+  };
+
+  if (!isDatabaseConnected) {
+    healthCheck.status = 'WARNING';
+    healthCheck.message = '⚠️ Server running but database connection issues';
+  }
+
+  res.json(healthCheck);
 });
 
-// ✅ 6. REGISTRO (COM SQL DIRETO)
+// ✅ 6. REGISTRO - COM LOGS DETALHADOS
 app.post('/auth/register', async (req, res) => {
   try {
     console.log('📝 Register attempt:', req.body.email);
     
     const { name, email, password } = req.body;
     
-    if (!name || !email || !password) {
+    // Validação melhorada
+    if (!name?.trim() || !email?.trim() || !password) {
       return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     }
 
-    if (!prisma) {
-      return res.status(500).json({ error: 'Database não disponível' });
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
     }
+
+    const normalizedEmail = email.trim().toLowerCase();
 
     // ✅ SQL DIRETO - Verificar se usuário existe
     const existingUsers = await req.prisma.$queryRaw`
-      SELECT * FROM "user" WHERE email = ${email}
+      SELECT id FROM "user" WHERE email = ${normalizedEmail}
     `;
-    const existingUser = existingUsers[0] || null;
-
-    if (existingUser) {
+    
+    if (existingUsers.length > 0) {
+      console.log('❌ User already exists:', normalizedEmail);
       return res.status(400).json({ error: 'Usuário já cadastrado' });
     }
 
@@ -106,18 +147,19 @@ app.post('/auth/register', async (req, res) => {
     // ✅ SQL DIRETO - Criar usuário
     const newUsers = await req.prisma.$queryRaw`
       INSERT INTO "user" (name, email, password, "createdAt", "updatedAt") 
-      VALUES (${name}, ${email}, ${hashedPassword}, NOW(), NOW())
+      VALUES (${name.trim()}, ${normalizedEmail}, ${hashedPassword}, NOW(), NOW())
       RETURNING id, name, email, "createdAt"
     `;
+    
     const user = newUsers[0];
 
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '24h' }
+      { expiresIn: '7d' } // Aumentado para 7 dias
     );
 
-    console.log('✅ User registered:', user.email);
+    console.log('✅ User registered successfully:', user.email);
     
     res.status(201).json({
       message: 'Usuário criado com sucesso',
@@ -131,41 +173,48 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-// ✅ 7. LOGIN (COM SQL DIRETO)
+// ✅ 7. LOGIN - COM DIAGNÓSTICO DETALHADO
 app.post('/auth/login', async (req, res) => {
   try {
     console.log('🔐 Login attempt:', req.body.email);
     
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    // Validação melhorada
+    if (!email?.trim() || !password) {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    if (!prisma) {
-      return res.status(500).json({ error: 'Database não disponível' });
-    }
+    const normalizedEmail = email.trim().toLowerCase();
+    console.log('📧 Normalized email:', normalizedEmail);
 
     // ✅ SQL DIRETO - Buscar usuário
     const users = await req.prisma.$queryRaw`
-      SELECT * FROM "user" WHERE email = ${email}
+      SELECT * FROM "user" WHERE email = ${normalizedEmail}
     `;
+    
     const user = users[0] || null;
 
     if (!user) {
+      console.log('❌ User not found:', normalizedEmail);
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
+    console.log('👤 User found:', user.email);
+    
+    // Log detalhado para diagnóstico
     const isPasswordValid = await bcrypt.compare(password, user.password);
+    console.log('🔑 Password validation:', isPasswordValid);
 
     if (!isPasswordValid) {
+      console.log('❌ Invalid password for user:', user.email);
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '24h' }
+      { expiresIn: '7d' }
     );
 
     console.log('✅ Login successful:', user.email);
@@ -186,24 +235,27 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// ✅ 8. MIDDLEWARE DE AUTENTICAÇÃO
+// ✅ 8. MIDDLEWARE DE AUTENTICAÇÃO - MELHORADO
 const authMiddleware = (req, res, next) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  const authHeader = req.headers.authorization;
   
-  if (!token) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Token de acesso não fornecido' });
   }
+
+  const token = authHeader.replace('Bearer ', '');
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
     req.user = decoded;
     next();
   } catch (error) {
+    console.error('❌ Token validation failed:', error.message);
     return res.status(401).json({ error: 'Token inválido ou expirado' });
   }
 };
 
-// ✅ 9. TRANSACTIONS - GET
+// ✅ 9. TRANSACTIONS - GET (mantido)
 app.get('/transactions', authMiddleware, async (req, res) => {
   try {
     const { page = 1, limit = 10, type, category } = req.query;
@@ -237,7 +289,7 @@ app.get('/transactions', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 10. TRANSACTIONS - POST
+// ✅ 10. TRANSACTIONS - POST (mantido)
 app.post('/transactions', authMiddleware, async (req, res) => {
   try {
     const { value, type, category, description, date } = req.body;
@@ -267,7 +319,7 @@ app.post('/transactions', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 11. TRANSACTIONS - DELETE
+// ✅ 11. TRANSACTIONS - DELETE (mantido)
 app.delete('/transactions/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -294,7 +346,7 @@ app.delete('/transactions/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 12. SUMMARY
+// ✅ 12. SUMMARY (mantido)
 app.get('/summary', authMiddleware, async (req, res) => {
   try {
     const where = { userId: req.user.userId };
@@ -343,7 +395,7 @@ app.get('/summary', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 13. LAYOUT - POST
+// ✅ 13. LAYOUT - POST (mantido)
 app.post('/layout', authMiddleware, async (req, res) => {
   try {
     const { layouts } = req.body;
@@ -374,7 +426,7 @@ app.post('/layout', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 14. LAYOUT - GET
+// ✅ 14. LAYOUT - GET (mantido)
 app.get('/layout', authMiddleware, async (req, res) => {
   try {
     const layouts = await req.prisma.dashboardLayout.findMany({
@@ -401,12 +453,21 @@ app.get('/layout', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 15. ERROR HANDLER
+// ✅ 15. ERROR HANDLER - MELHORADO
 app.use((err, req, res, next) => {
   console.error('💥 GLOBAL ERROR:', err);
+  
+  // Não vazar detalhes de erro em produção
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(500).json({ 
+      error: 'Internal Server Error'
+    });
+  }
+  
   res.status(500).json({ 
     error: 'Internal Server Error',
-    message: err.message 
+    message: err.message,
+    stack: err.stack
   });
 });
 
@@ -430,5 +491,10 @@ app.use('*', (req, res) => {
   });
 });
 
-console.log('🚀 Finfly Server started with ALL routes verified');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Finfly Server running on port ${PORT}`);
+  console.log(`📊 Database: ${isDatabaseConnected ? 'Connected' : 'Disconnected'}`);
+});
+
 module.exports = app;
