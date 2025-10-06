@@ -15,7 +15,7 @@ const app = express();
 
 // ✅ 1. CORS CONFIGURATION
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://moneyflow-jb3b.vercel.app');
+  res.header('Access-Control-Allow-Origin', 'https://finfly.vercel.app');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Credentials', 'true');

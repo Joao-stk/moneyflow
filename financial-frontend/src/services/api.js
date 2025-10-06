@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // ✅ URL CORRETA do backend no Vercel
-const API_URL = import.meta.env.VITE_API_URL || 'https://moneyflow-nine.vercel.app'
+const API_URL = import.meta.env.VITE_API_URL || 'https://finfly-nine.vercel.app'
 
 const api = axios.create({
   baseURL: API_URL,
