@@ -43,20 +43,57 @@ let isDatabaseConnected = false;
 
 const initializePrisma = async () => {
   try {
+    console.log('🔄 Initializing Prisma with optimized settings...');
+    
     const { PrismaClient } = require('@prisma/client');
     prisma = new PrismaClient({
-      log: ['error'], // Apenas logs de erro em produção
+      // Configurações otimizadas para serverless
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL
+        }
+      },
+      // Logs mínimos em produção
+      log: process.env.NODE_ENV === 'production' ? ['error'] : ['query', 'error', 'warn']
     });
+
+    // Teste de conexão com timeout maior
+    console.log('🔄 Testing database connection...');
+    const result = await Promise.race([
+      prisma.$queryRaw`SELECT 1 as test, NOW() as time`,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout after 15s')), 15000)
+      )
+    ]);
     
-    // Testa a conexão
-    await prisma.$queryRaw`SELECT 1`;
+    console.log('✅ Database connection successful:', result);
     isDatabaseConnected = true;
-    console.log('✅ Prisma Client connected to PostgreSQL');
+    
   } catch (error) {
-    console.error('❌ Prisma Client failed:', error.message);
+    console.error('💥 DATABASE CONNECTION FAILED:');
+    console.error('   Error:', error.message);
+    
+    // Diagnóstico específico
+    if (error.message.includes('timeout')) {
+      console.error('   ❌ Timeout - Database not responding');
+    } else if (error.message.includes('authentication')) {
+      console.error('   ❌ Authentication failed - check credentials');
+    } else if (error.message.includes('does not exist')) {
+      console.error('   ❌ Database does not exist');
+    }
+    
     isDatabaseConnected = false;
+    
+    // Tentar reconectar após 10 segundos
+    setTimeout(() => {
+      console.log('🔄 Attempting to reconnect...');
+      initializePrisma();
+    }, 10000);
   }
 };
+
+// Inicializar
+initializePrisma();
 
 initializePrisma();
 
