@@ -94,7 +94,7 @@ function Navbar() {
                     }
                   }}
                 >
-                  📊 Dashboard
+                  Dashboard
                 </Link>
                 <Link 
                   to="/transactions" 
@@ -119,7 +119,7 @@ function Navbar() {
                     }
                   }}
                 >
-                  💸 Lançamentos
+                  Lançamentos
                 </Link>
               </div>
             )}
@@ -186,7 +186,7 @@ function Navbar() {
                   e.target.style.transform = 'translateY(0px)'
                 }}
               >
-                🚪 Sair
+                Sair
               </button>
             </div>
           )}
