@@ -1,18 +1,15 @@
-// 🔧 FORCE SCHEMA PUBLIC - CORRIGIDO E MELHORADO
-const originalUrl = process.env.DATABASE_URL;
-if (originalUrl && !originalUrl.includes('schema=')) {
-  // Corrige a lógica para evitar duplicação de parâmetros
-  const separator = originalUrl.includes('?') ? '&' : '?';
-  process.env.DATABASE_URL = `${originalUrl}${separator}schema=public`;
+// 🔧 USE DATABASE_URL ORIGINAL DO NEON - SEM MODIFICAÇÕES
+console.log('🔧 Database configuration:');
+console.log('   DATABASE_URL present:', !!process.env.DATABASE_URL);
+if (process.env.DATABASE_URL) {
+  console.log('   URL preview:', process.env.DATABASE_URL.replace(/\/\/[^:]+:[^@]+@/, '//***:***@'));
 }
-console.log('🔧 Database URL configured');
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-
 // ✅ 1. CORS CONFIGURATION - MELHORADO
 app.use((req, res, next) => {
   const allowedOrigins = [
