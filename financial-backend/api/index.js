@@ -10,7 +10,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-// ✅ 1. CORS CONFIGURATION - MELHORADO
+
+// ✅ 1. CORS CONFIGURATION
 app.use((req, res, next) => {
   const allowedOrigins = [
     'https://finfly.vercel.app',
@@ -25,7 +26,7 @@ app.use((req, res, next) => {
   }
   
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
@@ -37,67 +38,30 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// ✅ 2. CONEXÃO COM BANCO - COM TRATAMENTO MELHORADO
+// ✅ 2. CONEXÃO COM BANCO - SIMPLES E FUNCIONAL
 let prisma;
 let isDatabaseConnected = false;
 
-const initializePrisma = async () => {
-  try {
-    console.log('🔄 Initializing Prisma with optimized settings...');
-    
-    const { PrismaClient } = require('@prisma/client');
-    prisma = new PrismaClient({
-      // Configurações otimizadas para serverless
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL
-        }
-      },
-      // Logs mínimos em produção
-      log: process.env.NODE_ENV === 'production' ? ['error'] : ['query', 'error', 'warn']
+try {
+  const { PrismaClient } = require('@prisma/client');
+  prisma = new PrismaClient();
+  
+  // Teste simples de conexão
+  prisma.$queryRaw`SELECT 1`
+    .then(() => {
+      isDatabaseConnected = true;
+      console.log('✅ Prisma Client connected to PostgreSQL');
+    })
+    .catch(error => {
+      console.error('❌ Prisma Client failed:', error.message);
+      isDatabaseConnected = false;
     });
+} catch (error) {
+  console.error('❌ Prisma Client initialization failed:', error.message);
+  isDatabaseConnected = false;
+}
 
-    // Teste de conexão com timeout maior
-    console.log('🔄 Testing database connection...');
-    const result = await Promise.race([
-      prisma.$queryRaw`SELECT 1 as test, NOW() as time`,
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout after 15s')), 15000)
-      )
-    ]);
-    
-    console.log('✅ Database connection successful:', result);
-    isDatabaseConnected = true;
-    
-  } catch (error) {
-    console.error('💥 DATABASE CONNECTION FAILED:');
-    console.error('   Error:', error.message);
-    
-    // Diagnóstico específico
-    if (error.message.includes('timeout')) {
-      console.error('   ❌ Timeout - Database not responding');
-    } else if (error.message.includes('authentication')) {
-      console.error('   ❌ Authentication failed - check credentials');
-    } else if (error.message.includes('does not exist')) {
-      console.error('   ❌ Database does not exist');
-    }
-    
-    isDatabaseConnected = false;
-    
-    // Tentar reconectar após 10 segundos
-    setTimeout(() => {
-      console.log('🔄 Attempting to reconnect...');
-      initializePrisma();
-    }, 10000);
-  }
-};
-
-// Inicializar
-initializePrisma();
-
-initializePrisma();
-
-// ✅ 3. MIDDLEWARE PARA INJETAR PRISMA - COM VALIDAÇÃO
+// ✅ 3. MIDDLEWARE PARA INJETAR PRISMA
 app.use((req, res, next) => {
   if (!isDatabaseConnected) {
     return res.status(503).json({ error: 'Serviço de banco de dados indisponível' });
@@ -106,14 +70,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ 4. ROTA RAIZ - ATUALIZADA
+// ✅ 4. ROTA RAIZ
 app.get('/', (req, res) => {
   res.json({ 
     status: 'SUCCESS', 
     message: '🚀 Finfly API Online',
     database: isDatabaseConnected ? '✅ Connected' : '❌ Disconnected',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
     endpoints: [
       'GET /',
       'GET /health',
@@ -129,50 +92,33 @@ app.get('/', (req, res) => {
   });
 });
 
-// ✅ 5. HEALTH CHECK - MELHORADO
-app.get('/health', async (req, res) => {
-  const healthCheck = {
-    status: 'OK',
+// ✅ 5. HEALTH CHECK
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
     message: '✅ Server is healthy',
-    timestamp: new Date().toISOString(),
-    database: isDatabaseConnected ? 'healthy' : 'unhealthy',
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-  };
-
-  if (!isDatabaseConnected) {
-    healthCheck.status = 'WARNING';
-    healthCheck.message = '⚠️ Server running but database connection issues';
-  }
-
-  res.json(healthCheck);
+    timestamp: new Date().toISOString()
+  });
 });
 
-// ✅ 6. REGISTRO - COM LOGS DETALHADOS
+// ✅ 6. REGISTRO (COM SQL DIRETO)
 app.post('/auth/register', async (req, res) => {
   try {
     console.log('📝 Register attempt:', req.body.email);
     
     const { name, email, password } = req.body;
     
-    // Validação melhorada
-    if (!name?.trim() || !email?.trim() || !password) {
+    if (!name || !email || !password) {
       return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
-
     // ✅ SQL DIRETO - Verificar se usuário existe
     const existingUsers = await req.prisma.$queryRaw`
-      SELECT id FROM "user" WHERE email = ${normalizedEmail}
+      SELECT * FROM "user" WHERE email = ${email}
     `;
-    
-    if (existingUsers.length > 0) {
-      console.log('❌ User already exists:', normalizedEmail);
+    const existingUser = existingUsers[0] || null;
+
+    if (existingUser) {
       return res.status(400).json({ error: 'Usuário já cadastrado' });
     }
 
@@ -181,19 +127,18 @@ app.post('/auth/register', async (req, res) => {
     // ✅ SQL DIRETO - Criar usuário
     const newUsers = await req.prisma.$queryRaw`
       INSERT INTO "user" (name, email, password, "createdAt", "updatedAt") 
-      VALUES (${name.trim()}, ${normalizedEmail}, ${hashedPassword}, NOW(), NOW())
+      VALUES (${name}, ${email}, ${hashedPassword}, NOW(), NOW())
       RETURNING id, name, email, "createdAt"
     `;
-    
     const user = newUsers[0];
 
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '7d' } // Aumentado para 7 dias
+      { expiresIn: '24h' }
     );
 
-    console.log('✅ User registered successfully:', user.email);
+    console.log('✅ User registered:', user.email);
     
     res.status(201).json({
       message: 'Usuário criado com sucesso',
@@ -207,48 +152,37 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-// ✅ 7. LOGIN - COM DIAGNÓSTICO DETALHADO
+// ✅ 7. LOGIN (COM SQL DIRETO)
 app.post('/auth/login', async (req, res) => {
   try {
     console.log('🔐 Login attempt:', req.body.email);
     
     const { email, password } = req.body;
 
-    // Validação melhorada
-    if (!email?.trim() || !password) {
+    if (!email || !password) {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    console.log('📧 Normalized email:', normalizedEmail);
-
     // ✅ SQL DIRETO - Buscar usuário
     const users = await req.prisma.$queryRaw`
-      SELECT * FROM "user" WHERE email = ${normalizedEmail}
+      SELECT * FROM "user" WHERE email = ${email}
     `;
-    
     const user = users[0] || null;
 
     if (!user) {
-      console.log('❌ User not found:', normalizedEmail);
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
-    console.log('👤 User found:', user.email);
-    
-    // Log detalhado para diagnóstico
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    console.log('🔑 Password validation:', isPasswordValid);
 
     if (!isPasswordValid) {
-      console.log('❌ Invalid password for user:', user.email);
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     console.log('✅ Login successful:', user.email);
@@ -269,27 +203,24 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// ✅ 8. MIDDLEWARE DE AUTENTICAÇÃO - MELHORADO
+// ✅ 8. MIDDLEWARE DE AUTENTICAÇÃO
 const authMiddleware = (req, res, next) => {
-  const authHeader = req.headers.authorization;
+  const token = req.headers.authorization?.replace('Bearer ', '');
   
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!token) {
     return res.status(401).json({ error: 'Token de acesso não fornecido' });
   }
-
-  const token = authHeader.replace('Bearer ', '');
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
     req.user = decoded;
     next();
   } catch (error) {
-    console.error('❌ Token validation failed:', error.message);
     return res.status(401).json({ error: 'Token inválido ou expirado' });
   }
 };
 
-// ✅ 9. TRANSACTIONS - GET (mantido)
+// ✅ 9. TRANSACTIONS - GET
 app.get('/transactions', authMiddleware, async (req, res) => {
   try {
     const { page = 1, limit = 10, type, category } = req.query;
@@ -323,7 +254,7 @@ app.get('/transactions', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 10. TRANSACTIONS - POST (mantido)
+// ✅ 10. TRANSACTIONS - POST
 app.post('/transactions', authMiddleware, async (req, res) => {
   try {
     const { value, type, category, description, date } = req.body;
@@ -353,7 +284,7 @@ app.post('/transactions', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 11. TRANSACTIONS - DELETE (mantido)
+// ✅ 11. TRANSACTIONS - DELETE
 app.delete('/transactions/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -380,7 +311,7 @@ app.delete('/transactions/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 12. SUMMARY (mantido)
+// ✅ 12. SUMMARY
 app.get('/summary', authMiddleware, async (req, res) => {
   try {
     const where = { userId: req.user.userId };
@@ -429,7 +360,7 @@ app.get('/summary', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 13. LAYOUT - POST (mantido)
+// ✅ 13. LAYOUT - POST
 app.post('/layout', authMiddleware, async (req, res) => {
   try {
     const { layouts } = req.body;
@@ -460,7 +391,7 @@ app.post('/layout', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 14. LAYOUT - GET (mantido)
+// ✅ 14. LAYOUT - GET
 app.get('/layout', authMiddleware, async (req, res) => {
   try {
     const layouts = await req.prisma.dashboardLayout.findMany({
@@ -487,21 +418,12 @@ app.get('/layout', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 15. ERROR HANDLER - MELHORADO
+// ✅ 15. ERROR HANDLER
 app.use((err, req, res, next) => {
   console.error('💥 GLOBAL ERROR:', err);
-  
-  // Não vazar detalhes de erro em produção
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(500).json({ 
-      error: 'Internal Server Error'
-    });
-  }
-  
   res.status(500).json({ 
     error: 'Internal Server Error',
-    message: err.message,
-    stack: err.stack
+    message: err.message 
   });
 });
 
@@ -525,10 +447,5 @@ app.use('*', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Finfly Server running on port ${PORT}`);
-  console.log(`📊 Database: ${isDatabaseConnected ? 'Connected' : 'Disconnected'}`);
-});
-
+console.log('🚀 Finfly Server started with ALL routes verified');
 module.exports = app;
