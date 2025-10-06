@@ -49,7 +49,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({ 
     status: 'SUCCESS', 
-    message: '🚀 MoneyFlow API Online',
+    message: '🚀 Finfly API Online',
     database: prisma ? '✅ Connected' : '❌ Disconnected',
     timestamp: new Date().toISOString(),
     endpoints: [
@@ -430,5 +430,5 @@ app.use('*', (req, res) => {
   });
 });
 
-console.log('🚀 MoneyFlow Server started with ALL routes verified');
+console.log('🚀 Finfly Server started with ALL routes verified');
 module.exports = app;
