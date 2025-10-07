@@ -9,15 +9,21 @@ import './App.css'
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
-  return user ? children : <Navigate to="/login" />
+  const location = useLocation()
+  
+  if (!user) {
+    // Salva a rota que o usuário tentou acessar
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+  
+  return children
 }
 
-// Componente para verificar se deve mostrar o navbar
 function AppLayout() {
   const { user } = useAuth()
   const location = useLocation()
   
-  // Não mostrar navbar nas páginas de login e register
+  // Não mostrar navbar nas páginas de auth
   const showNavbar = user && !['/login', '/register'].includes(location.pathname)
 
   return (
@@ -43,7 +49,8 @@ function AppLayout() {
               </ProtectedRoute>
             } 
           />
-          <Route path="/" element={<Navigate to="/transactions" />} />
+          {/* Rota coringa para SPA */}
+          <Route path="*" element={<Navigate to="/transactions" />} />
         </Routes>
       </div>
     </div>
