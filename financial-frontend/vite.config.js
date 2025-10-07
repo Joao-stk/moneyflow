@@ -13,5 +13,19 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
-  }
+  },
+  // ⬇️ ADICIONE ESTAS CONFIGURAÇÕES PARA PRODUÇÃO ⬇️
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      input: './index.html'
+    }
+  },
+  // ⬇️ CONFIGURAÇÃO SPA - ESSENCIAL! ⬇️
+  base: './',
+  esbuild: {
+    loader: 'jsx',
+  },
+  publicDir: 'public'
 })
