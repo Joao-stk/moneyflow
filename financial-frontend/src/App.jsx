@@ -7,6 +7,12 @@ import Transactions from './pages/Transactions'
 import Navbar from './components/Navbar'
 import './App.css'
 
+// Import das novas páginas
+import ProfilePage from './pages/Profile/ProfilePage'
+import SettingsPage from './pages/Settings/SettingsPage'
+import ExportPage from './pages/Export/ExportPage'
+import AboutPage from './pages/About/AboutPage'
+
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
   const location = useLocation()
@@ -31,8 +37,11 @@ function AppLayout() {
       {showNavbar && <Navbar />}
       <div className="container">
         <Routes>
+          {/* Rotas Públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          
+          {/* Rotas Protegidas */}
           <Route 
             path="/dashboard" 
             element={
@@ -49,8 +58,48 @@ function AppLayout() {
               </ProtectedRoute>
             } 
           />
-          {/* Rota coringa para SPA */}
-          <Route path="*" element={<Navigate to="/transactions" />} />
+          
+          {/* Novas Rotas Protegidas */}
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/settings" 
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/export" 
+            element={
+              <ProtectedRoute>
+                <ExportPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/about" 
+            element={
+              <ProtectedRoute>
+                <AboutPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* Rota coringa para SPA - Redireciona para transactions se logado, login se não */}
+          <Route 
+            path="*" 
+            element={
+              user ? <Navigate to="/transactions" /> : <Navigate to="/login" />
+            } 
+          />
         </Routes>
       </div>
     </div>

@@ -48,10 +48,10 @@ function Navbar() {
   }, [showUserMenu])
 
   const userMenuItems = [
-    { path: '/profile', label: '👤 Meu Perfil', icon: '👤' },
-    { path: '/settings', label: '⚙️ Configurações', icon: '⚙️' },
-    { path: '/export', label: '📤 Exportar Dados', icon: '📤' },
-    { path: '/about', label: 'ℹ️ Sobre', icon: 'ℹ️' }
+    { path: '/profile', label: 'Meu Perfil' },
+    { path: '/settings', label: 'Configurações'},
+    { path: '/export', label: 'Exportar Dados'},
+    { path: '/about', label: 'Sobre'}
   ]
 
   return (
