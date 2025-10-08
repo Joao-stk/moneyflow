@@ -39,18 +39,20 @@ app.use('/auth', authRoutes);
 // Middleware de autenticação para rotas protegidas
 app.use(authMiddleware);
 
-// ✅ CORREÇÃO: Rota de exportação DEPOIS do authMiddleware
+// ✅ Rota de exportação CORRIGIDA - COM FILTRO POR USUÁRIO
 app.get('/transactions/export', async (req, res) => {
   try {
     const { type = 'csv', range = 'all', startDate, endDate } = req.query;
-    const userId = req.user.id; // ✅ AGORA req.user existe!
+    const userId = req.user.id;
 
-    console.log('📤 Export request:', { type, range, userId });
+    console.log('📤 Export request from user:', userId, { type, range });
 
-    // Buscar transações do usuário
-    const where = { userId: userId };
+    // ✅ GARANTIR que sempre filtra pelo userId
+    const where = { 
+      userId: userId // ✅ FILTRO CRÍTICO DE SEGURANÇA
+    };
 
-    // Aplicar filtros de data
+    // Aplicar filtros de data APENAS para o usuário logado
     if (range === 'month') {
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
@@ -70,28 +72,51 @@ app.get('/transactions/export', async (req, res) => {
       };
     }
 
+    console.log('🔐 Query filter:', where);
+
+    // ✅ BUSCA APENAS transações do usuário logado
     const transactions = await req.prisma.transaction.findMany({
       where: where,
       orderBy: { date: 'desc' }
     });
 
-    console.log(`📊 Found ${transactions.length} transactions for export`);
+    console.log(`📊 User ${userId} has ${transactions.length} transactions for export`);
+
+    // ✅ VALIDAÇÃO DE SEGURANÇA: Verificar se as transações pertencem ao usuário
+    const unauthorizedTransactions = transactions.filter(tx => tx.userId !== userId);
+    if (unauthorizedTransactions.length > 0) {
+      console.error('🚨 CRITICAL: Unauthorized transactions found for user:', userId);
+      return res.status(403).json({ error: 'Acesso negado a transações de outros usuários' });
+    }
 
     let data, contentType, filename;
 
     if (type === 'csv') {
       data = generateCSV(transactions);
       contentType = 'text/csv';
-      filename = `finfly-export-${Date.now()}.csv`;
+      filename = `finfly-user${userId}-export-${Date.now()}.csv`;
     } else if (type === 'json') {
       data = JSON.stringify({
         exportedAt: new Date().toISOString(),
-        user: req.user.email,
+        user: {
+          id: userId,
+          email: req.user.email
+        },
         transactionCount: transactions.length,
-        transactions: transactions
+        transactions: transactions.map(tx => ({
+          // ✅ INCLUIR userId no JSON para verificação
+          id: tx.id,
+          date: tx.date,
+          description: tx.description,
+          category: tx.category,
+          type: tx.type,
+          value: tx.value,
+          userId: tx.userId, // ✅ PARA DEBUG/VERIFICAÇÃO
+          createdAt: tx.createdAt
+        }))
       }, null, 2);
       contentType = 'application/json';
-      filename = `finfly-export-${Date.now()}.json`;
+      filename = `finfly-user${userId}-export-${Date.now()}.json`;
     } else {
       return res.status(400).json({ error: 'Tipo não suportado. Use csv ou json.' });
     }
@@ -99,7 +124,7 @@ app.get('/transactions/export', async (req, res) => {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     
-    console.log(`✅ Export completed: ${filename}`);
+    console.log(`✅ Export completed for user ${userId}: ${filename}`);
     return res.send(data);
 
   } catch (error) {
@@ -146,7 +171,7 @@ app.use('*', (req, res) => {
 
 // Função para gerar CSV
 function generateCSV(transactions) {
-  const headers = 'Data,Descrição,Categoria,Tipo,Valor\n';
+  const headers = 'Data,Descrição,Categoria,Tipo,Valor,UserId\n'; // ✅ INCLUIR UserId para debug
   
   const rows = transactions.map(tx => {
     const date = new Date(tx.date).toLocaleDateString('pt-BR');
@@ -154,8 +179,9 @@ function generateCSV(transactions) {
     const category = tx.category;
     const type = tx.type === 'income' ? 'Receita' : 'Despesa';
     const value = tx.value.toFixed(2).replace('.', ',');
+    const userId = tx.userId; // ✅ INCLUIR UserId no CSV para verificação
     
-    return `${date},${description},${category},${type},${value}`;
+    return `${date},${description},${category},${type},${value},${userId}`;
   }).join('\n');
 
   return headers + rows;
@@ -170,6 +196,7 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
     console.log(`📊 Sistema de controle financeiro pessoal`);
+    console.log(`🔐 SEGURANÇA: Filtro por userId implementado`);
     console.log(`🌐 CORS habilitado`);
     console.log(`📤 Rota de exportação disponível: GET /transactions/export`);
   });
