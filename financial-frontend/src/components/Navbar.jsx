@@ -8,6 +8,7 @@ function Navbar() {
   const location = useLocation()
   const [isMobile, setIsMobile] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
 
   // Detecta se é mobile
   useEffect(() => {
@@ -33,6 +34,25 @@ function Navbar() {
   const handleMobileLinkClick = () => {
     setShowMobileMenu(false)
   }
+
+  // Fecha menu do usuário ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showUserMenu && !event.target.closest('.user-menu-trigger') && !event.target.closest('.user-menu-dropdown')) {
+        setShowUserMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showUserMenu])
+
+  const userMenuItems = [
+    { path: '/profile', label: '👤 Meu Perfil', icon: '👤' },
+    { path: '/settings', label: '⚙️ Configurações', icon: '⚙️' },
+    { path: '/export', label: '📤 Exportar Dados', icon: '📤' },
+    { path: '/about', label: 'ℹ️ Sobre', icon: 'ℹ️' }
+  ]
 
   return (
     <nav style={{
@@ -184,18 +204,36 @@ function Navbar() {
               display: 'flex', 
               alignItems: 'center', 
               gap: isMobile ? '0.5rem' : '1rem',
-              flexWrap: 'wrap'
+              flexWrap: 'wrap',
+              position: 'relative'
             }}>
-              {/* Informações do usuário - Esconder nome no mobile muito pequeno */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                background: 'rgba(255,255,255,0.1)',
-                padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
-                borderRadius: '20px',
-                border: '1px solid rgba(255,255,255,0.2)'
-              }}>
+              {/* Botão do Menu do Usuário */}
+              <button 
+                className="user-menu-trigger"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  background: 'rgba(255,255,255,0.1)',
+                  padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
+                  borderRadius: '20px',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  fontSize: isMobile ? '0.8rem' : '0.9rem',
+                  fontWeight: '500'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = 'rgba(255,255,255,0.2)'
+                }}
+                onMouseLeave={(e) => {
+                  if (!showUserMenu) {
+                    e.target.style.background = 'rgba(255,255,255,0.1)'
+                  }
+                }}
+              >
                 <div style={{
                   width: isMobile ? '28px' : '32px',
                   height: isMobile ? '28px' : '32px',
@@ -210,47 +248,155 @@ function Navbar() {
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 {(!isMobile || window.innerWidth > 400) && (
-                  <span style={{ 
-                    color: 'white', 
-                    fontWeight: '500',
-                    fontSize: isMobile ? '0.8rem' : '0.9rem'
-                  }}>
+                  <span>
                     Olá, {user.name.split(' ')[0]}
                   </span>
                 )}
-              </div>
-              
-              {/* Botão Sair - Ícone no mobile */}
-              <button 
-                onClick={handleLogout}
-                style={{ 
-                  padding: isMobile ? '0.6rem' : '0.5rem 1rem',
-                  fontSize: isMobile ? '1.1rem' : '0.9rem',
-                  background: 'rgba(255,255,255,0.1)',
-                  color: 'white',
-                  border: '1px solid rgba(255,255,255,0.3)',
-                  borderRadius: isMobile ? '50%' : '8px',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  fontWeight: '500',
-                  width: isMobile ? '40px' : 'auto',
-                  height: isMobile ? '40px' : 'auto',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = 'rgba(255,255,255,0.2)'
-                  e.target.style.transform = 'translateY(-1px)'
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = 'rgba(255,255,255,0.1)'
-                  e.target.style.transform = 'translateY(0px)'
-                }}
-                title={isMobile ? "Sair" : ""}
-              >
-                {isMobile ? '❌' : 'Sair'}
+                <span style={{ 
+                  fontSize: '0.8rem',
+                  transition: 'transform 0.3s ease',
+                  transform: showUserMenu ? 'rotate(180deg)' : 'rotate(0deg)'
+                }}>
+                  ▼
+                </span>
               </button>
+
+              {/* Menu Dropdown do Usuário */}
+              {showUserMenu && (
+                <div 
+                  className="user-menu-dropdown"
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    background: 'white',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                    border: '1px solid #e0e0e0',
+                    minWidth: '200px',
+                    zIndex: 1001,
+                    marginTop: '0.5rem',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* Header do Menu */}
+                  <div style={{
+                    padding: '1rem',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    borderBottom: '1px solid rgba(255,255,255,0.2)'
+                  }}>
+                    <div style={{ fontWeight: '600', fontSize: '1rem' }}>
+                      {user.name}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                      {user.email}
+                    </div>
+                  </div>
+
+                  {/* Itens do Menu */}
+                  <div style={{ padding: '0.5rem 0' }}>
+                    {userMenuItems.map((item) => (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.75rem',
+                          padding: '0.75rem 1rem',
+                          color: '#333',
+                          textDecoration: 'none',
+                          transition: 'all 0.2s ease',
+                          fontSize: '0.9rem',
+                          borderLeft: '3px solid transparent'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = '#f8f9fa'
+                          e.target.style.borderLeftColor = '#667eea'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background = 'transparent'
+                          e.target.style.borderLeftColor = 'transparent'
+                        }}
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+
+                  {/* Divisor */}
+                  <div style={{
+                    height: '1px',
+                    background: '#e0e0e0',
+                    margin: '0.5rem 0'
+                  }} />
+
+                  {/* Logout */}
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      padding: '0.75rem 1rem',
+                      background: 'none',
+                      border: 'none',
+                      color: '#dc3545',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      fontSize: '0.9rem',
+                      textAlign: 'left'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#fff5f5'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = 'transparent'
+                    }}
+                  >
+                    <span style={{ fontSize: '1.1rem' }}>🚪</span>
+                    Sair
+                  </button>
+                </div>
+              )}
+
+              {/* Botão Sair Separado - Apenas quando menu não está visível no mobile */}
+              {isMobile && !showUserMenu && (
+                <button 
+                  onClick={handleLogout}
+                  style={{ 
+                    padding: '0.6rem',
+                    fontSize: '1.1rem',
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    fontWeight: '500',
+                    width: '40px',
+                    height: '40px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'rgba(255,255,255,0.2)'
+                    e.target.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'rgba(255,255,255,0.1)'
+                    e.target.style.transform = 'translateY(0px)'
+                  }}
+                  title="Sair"
+                >
+                  🚪
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -313,13 +459,38 @@ function Navbar() {
               >
                 💰 Lançamentos
               </Link>
+
+              {/* Itens do Menu do Usuário no Mobile */}
+              {userMenuItems.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  style={{
+                    color: 'white',
+                    textDecoration: 'none',
+                    padding: '1rem',
+                    borderRadius: '8px',
+                    background: isActive(item.path) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
+                    border: isActive(item.path) ? '1px solid rgba(255,255,255,0.3)' : '1px solid rgba(255,255,255,0.2)',
+                    transition: 'all 0.3s ease',
+                    fontWeight: isActive(item.path) ? '600' : '400',
+                    fontSize: '1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem'
+                  }}
+                  onClick={handleMobileLinkClick}
+                >
+                  {item.icon} {item.label}
+                </Link>
+              ))}
             </div>
           </div>
         )}
       </div>
 
       {/* Overlay para fechar menu ao clicar fora */}
-      {showMobileMenu && (
+      {(showMobileMenu || showUserMenu) && (
         <div 
           style={{
             position: 'fixed',
@@ -330,7 +501,10 @@ function Navbar() {
             background: 'rgba(0,0,0,0.3)',
             zIndex: 999
           }}
-          onClick={() => setShowMobileMenu(false)}
+          onClick={() => {
+            setShowMobileMenu(false)
+            setShowUserMenu(false)
+          }}
         />
       )}
     </nav>
