@@ -17,7 +17,12 @@ connectDB();
 
 // Middlewares - CORS PRIMEIRO
 app.use(cors({
-  origin: 'http://localhost:5173', // URL do seu frontend
+  origin: [
+    'http://localhost:5173',
+    'https://finfly.vercel.app',
+    'https://finfly-git-main-joao-stks-projects.vercel.app',
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -34,7 +39,7 @@ app.use('/auth', authRoutes);
 // Middleware de autenticação para rotas protegidas
 app.use(authMiddleware);
 
-// ✅ CORREÇÃO: Rota de exportação PRIMEIRO (antes das outras rotas de transactions)
+// ✅ Rota de exportação PRIMEIRO (antes das outras rotas de transactions)
 app.get('/transactions/export', async (req, res) => {
   try {
     const { type = 'csv', range = 'all', startDate, endDate } = req.query;
@@ -128,7 +133,7 @@ app.use('*', (req, res) => {
       'GET /health',
       'POST /auth/register',
       'POST /auth/login',
-      'GET /transactions/export', // ✅ AGORA PRIMEIRO NA LISTA
+      'GET /transactions/export',
       'GET /transactions',
       'POST /transactions', 
       'DELETE /transactions/:id',
@@ -156,11 +161,16 @@ function generateCSV(transactions) {
   return headers + rows;
 }
 
-const PORT = process.env.PORT || 3000;
+// ✅ EXPORT para Vercel (IMPORTANTE!)
+module.exports = app;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📊 Sistema de controle financeiro pessoal`);
-  console.log(`🌐 CORS habilitado para: http://localhost:5173`);
-  console.log(`📤 Rota de exportação disponível: GET /transactions/export`);
-});
+// ✅ Ou se preferir escutar localmente também:
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`📊 Sistema de controle financeiro pessoal`);
+    console.log(`🌐 CORS habilitado`);
+    console.log(`📤 Rota de exportação disponível: GET /transactions/export`);
+  });
+}
