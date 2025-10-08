@@ -113,6 +113,23 @@ const doughnutOptions = {
   }
 }
 
+// Função para obter o primeiro dia do mês atual
+const getFirstDayOfMonth = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+// Função para obter o último dia do mês atual
+const getLastDayOfMonth = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0);
+}
+
+// Função para formatar data para YYYY-MM-DD
+const formatDate = (date) => {
+  return date.toISOString().split('T')[0];
+}
+
 function Dashboard() {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -122,11 +139,13 @@ function Dashboard() {
   const [timeRange, setTimeRange] = useState('month')
   const [isEditing, setIsEditing] = useState(false)
   const [currentLayouts, setCurrentLayouts] = useState(defaultLayouts)
+  const [startDate, setStartDate] = useState(formatDate(getFirstDayOfMonth()))
+  const [endDate, setEndDate] = useState(formatDate(getLastDayOfMonth()))
 
   useEffect(() => {
     loadSummary()
     loadLayout()
-  }, [timeRange])
+  }, [timeRange, startDate, endDate])
 
   // Carregar layout do banco - CORRIGIDO para não mostrar erro se não existir
   const loadLayout = async () => {
@@ -175,9 +194,23 @@ function Dashboard() {
       setLoading(true)
       console.log(`Carregando resumo para período: ${timeRange}`)
       
-      const response = await summaryAPI.getSummary({ 
-        period: timeRange 
-      })
+      let params = {}
+      
+      if (timeRange === 'custom') {
+        // Para período personalizado, usar startDate e endDate
+        params = {
+          period: 'custom',
+          startDate: startDate,
+          endDate: endDate
+        }
+      } else {
+        // Para período pré-definido
+        params = {
+          period: timeRange
+        }
+      }
+      
+      const response = await summaryAPI.getSummary(params)
       
       console.log('Resposta do resumo:', response.data)
       setSummary(response.data)
@@ -194,13 +227,25 @@ function Dashboard() {
   const getPeriodText = () => {
     if (!summary) return ''
     
-    const now = new Date()
     if (timeRange === 'month') {
+      const now = new Date()
       return now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
     } else if (timeRange === 'year') {
+      const now = new Date()
       return now.getFullYear().toString()
+    } else if (timeRange === 'custom') {
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      return `${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')}`
     }
     return 'Todos os períodos'
+  }
+
+  // Função para resetar para o mês atual
+  const resetToCurrentMonth = () => {
+    setStartDate(formatDate(getFirstDayOfMonth()))
+    setEndDate(formatDate(getLastDayOfMonth()))
+    setTimeRange('month')
   }
 
   // Função chamada quando o layout muda
@@ -363,7 +408,7 @@ function Dashboard() {
           )}
         </div>
         
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <select 
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
@@ -372,7 +417,37 @@ function Dashboard() {
           >
             <option value="month">Este Mês</option>
             <option value="year">Este Ano</option>
+            <option value="custom">Período Personalizado</option>
           </select>
+          
+          {/* Filtros de data para período personalizado */}
+          {timeRange === 'custom' && (
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="form-control"
+                style={{ width: 'auto' }}
+              />
+              <span>até</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="form-control"
+                style={{ width: 'auto' }}
+              />
+              <button 
+                onClick={resetToCurrentMonth}
+                className="btn btn-outline-secondary"
+                style={{ whiteSpace: 'nowrap' }}
+                title="Voltar para mês atual"
+              >
+                📅 Mês Atual
+              </button>
+            </div>
+          )}
           
           <button 
             onClick={() => isEditing ? handleStopEditing() : setIsEditing(true)}
@@ -425,7 +500,9 @@ function Dashboard() {
           <p style={{ color: '#6c757d', marginBottom: '20px' }}>
             {timeRange === 'month' 
               ? 'Não há transações para este mês.' 
-              : 'Não há transações para este ano.'
+              : timeRange === 'year'
+              ? 'Não há transações para este ano.'
+              : 'Não há transações para o período selecionado.'
             }
           </p>
           <button 
@@ -453,7 +530,7 @@ function Dashboard() {
           {/* Cards de Resumo */}
           <div key="summary-cards" style={gridItemStyle}>
             <h3 style={{ marginBottom: '15px', textAlign: 'center' }}>
-              Resumo {timeRange === 'month' ? 'Mensal' : 'Anual'}
+              Resumo {timeRange === 'month' ? 'Mensal' : timeRange === 'year' ? 'Anual' : 'do Período'}
             </h3>
             {summary && (
               <div style={{ 
@@ -472,7 +549,7 @@ function Dashboard() {
                     R$ {summary.summary.balance.toFixed(2)}
                   </div>
                   <div style={{ fontSize: '0.7rem', color: '#6c757d', marginTop: '5px' }}>
-                    {timeRange === 'month' ? 'este mês' : 'este ano'}
+                    {timeRange === 'month' ? 'este mês' : timeRange === 'year' ? 'este ano' : 'no período'}
                   </div>
                 </div>
 
@@ -486,7 +563,7 @@ function Dashboard() {
                     R$ {summary.summary.totalIncome.toFixed(2)}
                   </div>
                   <div style={{ fontSize: '0.7rem', color: '#6c757d', marginTop: '5px' }}>
-                    {timeRange === 'month' ? 'este mês' : 'este ano'}
+                    {timeRange === 'month' ? 'este mês' : timeRange === 'year' ? 'este ano' : 'no período'}
                   </div>
                 </div>
 
@@ -500,7 +577,7 @@ function Dashboard() {
                     R$ {summary.summary.totalExpense.toFixed(2)}
                   </div>
                   <div style={{ fontSize: '0.7rem', color: '#6c757d', marginTop: '5px' }}>
-                    {timeRange === 'month' ? 'este mês' : 'este ano'}
+                    {timeRange === 'month' ? 'este mês' : timeRange === 'year' ? 'este ano' : 'no período'}
                   </div>
                 </div>
 
@@ -514,7 +591,7 @@ function Dashboard() {
                     {summary.summary.transactionCount}
                   </div>
                   <div style={{ fontSize: '0.7rem', color: '#6c757d', marginTop: '5px' }}>
-                    {timeRange === 'month' ? 'este mês' : 'este ano'}
+                    {timeRange === 'month' ? 'este mês' : timeRange === 'year' ? 'este ano' : 'no período'}
                   </div>
                 </div>
               </div>
