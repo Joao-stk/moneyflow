@@ -249,7 +249,7 @@ function Navbar() {
                 }}
                 title={isMobile ? "Sair" : ""}
               >
-                {isMobile ? '🚪' : 'Sair'}
+                {isMobile ? '❌' : 'Sair'}
               </button>
             </div>
           )}
