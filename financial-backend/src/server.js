@@ -9,6 +9,7 @@ const transactionRoutes = require('./routes/transactions');
 const summaryRoutes = require('./routes/summary');
 const authMiddleware = require('./middlewares/auth');
 const layoutRoutes = require('./routes/layout');
+const exportRoutes = require('./routes/export'); // ✅ NOVA IMPORT
 
 const app = express();
 
@@ -37,7 +38,8 @@ app.use(authMiddleware);
 // Rotas protegidas
 app.use('/transactions', transactionRoutes);
 app.use('/summary', summaryRoutes);
-app.use('/layout', layoutRoutes); // ← Adicione esta linha
+app.use('/layout', layoutRoutes);
+app.use('/transactions', exportRoutes); // ✅ NOVA ROTA
 
 // Rota de saúde
 app.get('/health', (req, res) => {
@@ -61,15 +63,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log(`📊 Sistema de controle financeiro pessoal`);
   console.log(`🌐 CORS habilitado para: http://localhost:5173`);
-  // ... outras importações
-const layoutRoutes = require('./routes/layout');
-
-// ... outro código
-
-// Rotas protegidas
-app.use('/transactions', transactionRoutes);
-app.use('/summary', summaryRoutes);
-app.use('/layout', layoutRoutes); // ← Adicione esta linha
-
-// ... resto do código
+  console.log(`📤 Rota de exportação disponível: /transactions/export`); // ✅ NOVO LOG
 });

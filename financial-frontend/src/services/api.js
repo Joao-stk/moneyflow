@@ -47,6 +47,24 @@ export const transactionsAPI = {
   
   deleteTransaction: (id) => 
     api.delete(`/transactions/${id}`),
+  
+  // ✅ NOVA FUNÇÃO PARA EXPORTAR DADOS
+  exportData: ({ type = 'csv', range = 'all', startDate, endDate }) => {
+    const params = {
+      type,
+      range,
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate })
+    }
+
+    // Configuração especial para receber blob (PDF) ou texto (CSV/JSON)
+    const config = {
+      params,
+      responseType: type === 'pdf' ? 'blob' : 'text'
+    }
+
+    return api.get('/transactions/export', config)
+  }
 }
 
 export const summaryAPI = {

@@ -44,18 +44,6 @@ function AboutPage() {
           </div>
 
           <div>
-            <h3>📞 Suporte</h3>
-            <p>
-              Precisa de ajuda? Entre em contato conosco:
-            </p>
-            <ul style={{ paddingLeft: '20px' }}>
-              <li>Email: suporte@finfly.com</li>
-              <li>Telefone: (11) 99999-9999</li>
-              <li>Horário: Seg-Sex, 9h-18h</li>
-            </ul>
-          </div>
-
-          <div>
             <h3>📄 Termos Legais</h3>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <a href="#" style={{ color: '#667eea', textDecoration: 'none' }}>
@@ -79,7 +67,7 @@ function AboutPage() {
           }}>
             <p style={{ margin: 0, color: '#6c757d' }}>
               <strong>Versão 1.0.0</strong><br />
-              © 2024 FinFly. Todos os direitos reservados.
+              © 2025 FinFly. Todos os direitos reservados.
             </p>
           </div>
         </div>
