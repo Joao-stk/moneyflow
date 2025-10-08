@@ -7,7 +7,8 @@ export default defineConfig({
     port: 5173
   },
   build: {
-    outDir: 'dist'
-  },
-  base: './'  // ← VOLTE PARA './' e teste
+    outDir: 'dist',
+    assetsDir: 'assets'
+  }
+  // ⬇️ SEM base property ⬇️
 })
