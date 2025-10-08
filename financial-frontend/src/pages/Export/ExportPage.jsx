@@ -5,26 +5,47 @@ function ExportPage() {
   const [exportType, setExportType] = useState('csv')
   const [dateRange, setDateRange] = useState('all')
   const [isExporting, setIsExporting] = useState(false)
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
 
   const handleExport = async () => {
     setIsExporting(true)
     try {
+      // ✅ CORREÇÃO: response JÁ É OS DADOS, não response.data
       const data = await transactionsAPI.exportData({
         type: exportType,
-        range: dateRange
+        range: dateRange,
+        startDate: customStartDate,
+        endDate: customEndDate
       })
+
+      console.log('📤 Dados recebidos:', data)
+
+      // Criar download baseado no tipo
+      let blob, filename
       
-      // Criar download
-      const blob = new Blob([data], { type: 'text/csv' })
+      if (exportType === 'pdf') {
+        blob = data
+        filename = `finfly-export-${new Date().toISOString().split('T')[0]}.pdf`
+      } else {
+        const blobType = exportType === 'csv' ? 'text/csv' : 'application/json'
+        blob = new Blob([data], { type: blobType })
+        filename = `finfly-export-${new Date().toISOString().split('T')[0]}.${exportType}`
+      }
+
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `finfly-export-${new Date().toISOString().split('T')[0]}.${exportType}`
+      a.download = filename
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
       
-      alert('Exportação realizada com sucesso!')
+      alert('✅ Exportação realizada com sucesso!')
     } catch (error) {
-      alert('Erro ao exportar dados: ' + error.message)
+      console.error('❌ Erro ao exportar:', error)
+      alert('❌ Erro ao exportar dados: ' + (error.response?.data?.error || error.message || 'Tente novamente'))
     } finally {
       setIsExporting(false)
     }
@@ -46,7 +67,6 @@ function ExportPage() {
           >
             <option value="csv">CSV (Excel, Google Sheets)</option>
             <option value="json">JSON (Backup completo)</option>
-            <option value="pdf">PDF (Relatório)</option>
           </select>
         </div>
 
@@ -69,11 +89,21 @@ function ExportPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div className="form-group">
               <label>Data Inicial:</label>
-              <input type="date" className="form-control" />
+              <input 
+                type="date" 
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="form-control" 
+              />
             </div>
             <div className="form-group">
               <label>Data Final:</label>
-              <input type="date" className="form-control" />
+              <input 
+                type="date" 
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="form-control" 
+              />
             </div>
           </div>
         )}
@@ -82,14 +112,15 @@ function ExportPage() {
           background: '#f8f9fa', 
           padding: '15px', 
           borderRadius: '8px',
-          marginTop: '20px'
+          marginTop: '20px',
+          fontSize: '0.9rem'
         }}>
           <h4>📊 Dados Incluídos:</h4>
           <ul style={{ margin: '10px 0', paddingLeft: '20px' }}>
             <li>Todas as transações</li>
             <li>Categorias e tags</li>
-            <li>Metas e orçamentos</li>
-            <li>Configurações do usuário</li>
+            <li>Datas e valores</li>
+            <li>Tipos (Receita/Despesa)</li>
           </ul>
         </div>
 
@@ -97,7 +128,12 @@ function ExportPage() {
           onClick={handleExport}
           disabled={isExporting}
           className="btn btn-primary"
-          style={{ marginTop: '20px', width: '100%', padding: '15px' }}
+          style={{ 
+            marginTop: '20px', 
+            width: '100%', 
+            padding: '15px',
+            fontSize: '1.1rem'
+          }}
         >
           {isExporting ? '⏳ Exportando...' : '📥 Exportar Dados'}
         </button>
