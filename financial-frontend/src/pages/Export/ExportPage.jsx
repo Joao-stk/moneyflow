@@ -11,7 +11,9 @@ function ExportPage() {
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      // ✅ CORREÇÃO: response JÁ É OS DADOS, não response.data
+      console.log('📤 Iniciando exportação...', { exportType, dateRange })
+
+      // ✅ CORREÇÃO: Agora response JÁ é os dados processados
       const data = await transactionsAPI.exportData({
         type: exportType,
         range: dateRange,
@@ -19,20 +21,21 @@ function ExportPage() {
         endDate: customEndDate
       })
 
-      console.log('📤 Dados recebidos:', data)
+      console.log('✅ Dados recebidos:', typeof data, data)
 
-      // Criar download baseado no tipo
-      let blob, filename
-      
-      if (exportType === 'pdf') {
-        blob = data
-        filename = `finfly-export-${new Date().toISOString().split('T')[0]}.pdf`
-      } else {
-        const blobType = exportType === 'csv' ? 'text/csv' : 'application/json'
-        blob = new Blob([data], { type: blobType })
-        filename = `finfly-export-${new Date().toISOString().split('T')[0]}.${exportType}`
+      let blob, filename, blobType
+
+      if (exportType === 'csv') {
+        // ✅ Para CSV, data já é uma string
+        blob = new Blob([data], { type: 'text/csv; charset=utf-8' })
+        filename = `finfly-export-${new Date().toISOString().split('T')[0]}.csv`
+      } else if (exportType === 'json') {
+        // ✅ Para JSON, data já é uma string JSON
+        blob = new Blob([data], { type: 'application/json; charset=utf-8' })
+        filename = `finfly-export-${new Date().toISOString().split('T')[0]}.json`
       }
 
+      // Criar download
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -42,7 +45,9 @@ function ExportPage() {
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
       
+      console.log('✅ Download criado:', filename)
       alert('✅ Exportação realizada com sucesso!')
+      
     } catch (error) {
       console.error('❌ Erro ao exportar:', error)
       alert('❌ Erro ao exportar dados: ' + (error.response?.data?.error || error.message || 'Tente novamente'))
@@ -136,6 +141,31 @@ function ExportPage() {
           }}
         >
           {isExporting ? '⏳ Exportando...' : '📥 Exportar Dados'}
+        </button>
+
+        {/* ✅ Botão de debug temporário */}
+        <button 
+          onClick={async () => {
+            try {
+              const response = await transactionsAPI.exportData({ type: 'csv', range: 'all' })
+              console.log('🔍 Debug - Tipo de dados:', typeof response)
+              console.log('🔍 Debug - Primeiros 100 caracteres:', response.substring(0, 100))
+              console.log('🔍 Debug - Dados completos:', response)
+            } catch (error) {
+              console.error('🔍 Debug - Erro:', error)
+            }
+          }}
+          style={{ 
+            marginTop: '10px', 
+            padding: '10px',
+            background: '#6c757d',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer'
+          }}
+        >
+          🔍 Debug Export
         </button>
       </div>
     </div>
