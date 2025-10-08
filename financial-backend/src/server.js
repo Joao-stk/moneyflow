@@ -39,11 +39,11 @@ app.use('/auth', authRoutes);
 // Middleware de autenticação para rotas protegidas
 app.use(authMiddleware);
 
-// ✅ Rota de exportação PRIMEIRO (antes das outras rotas de transactions)
+// ✅ CORREÇÃO: Rota de exportação DEPOIS do authMiddleware
 app.get('/transactions/export', async (req, res) => {
   try {
     const { type = 'csv', range = 'all', startDate, endDate } = req.query;
-    const userId = req.user.id;
+    const userId = req.user.id; // ✅ AGORA req.user existe!
 
     console.log('📤 Export request:', { type, range, userId });
 
@@ -161,10 +161,10 @@ function generateCSV(transactions) {
   return headers + rows;
 }
 
-// ✅ EXPORT para Vercel (IMPORTANTE!)
+// ✅ EXPORT para Vercel
 module.exports = app;
 
-// ✅ Ou se preferir escutar localmente também:
+// ✅ Para desenvolvimento local
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
