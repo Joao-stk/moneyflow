@@ -47,63 +47,6 @@ export const transactionsAPI = {
   
   deleteTransaction: (id) => 
     api.delete(`/transactions/${id}`),
-  
-  // ✅ FUNÇÃO CORRIGIDA PARA EXPORTAR DADOS
-  exportData: async ({ type = 'csv', range = 'all', startDate, endDate }) => {
-    try {
-      const params = {
-        type,
-        range,
-        ...(startDate && { startDate }),
-        ...(endDate && { endDate })
-      }
-
-      console.log('📤 Enviando requisição de exportação:', params)
-
-      // ✅ CORREÇÃO: Use responseType 'blob' para todos os tipos
-      const response = await api.get('/transactions/export', {
-        params,
-        responseType: 'blob' // ✅ SEMPRE use blob para downloads
-      })
-
-      console.log('✅ Resposta recebida, tipo:', response.data.type)
-
-      // ✅ Para CSV/JSON, converta o blob para texto
-      if (type === 'csv' || type === 'json') {
-        const text = await blobToText(response.data)
-        return text
-      }
-
-      // ✅ Para PDF, retorne o blob diretamente
-      return response.data
-
-    } catch (error) {
-      console.error('❌ Erro na exportação:', error)
-      
-      // ✅ Tente extrair mensagem de erro do blob se for um erro do servidor
-      if (error.response && error.response.data instanceof Blob) {
-        try {
-          const errorText = await blobToText(error.response.data)
-          const errorData = JSON.parse(errorText)
-          error.message = errorData.error || error.message
-        } catch {
-          // Se não conseguir parsear, mantém a mensagem original
-        }
-      }
-      
-      throw error
-    }
-  }
-}
-
-// ✅ Função auxiliar para converter blob para texto
-function blobToText(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsText(blob)
-  })
 }
 
 export const summaryAPI = {

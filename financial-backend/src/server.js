@@ -121,7 +121,7 @@ app.get('/transactions/export', async (req, res) => {
 // ✅ MANTENHA SUAS ROTAS EXISTENTES
 app.use('/transactions', transactionRoutes);
 app.use('/summary', summaryRoutes);
-app.use('/layout', layoutRoutes);
+app.use('/layout', layoutRoutes); // ← Adicione esta linha
 
 // ✅ MANTENHA SUA ROTA DE SAÚDE
 app.get('/health', (req, res) => {
@@ -154,34 +154,21 @@ app.use('*', (req, res) => {
   });
 });
 
-// ✅ MANTENHA SUA FUNÇÃO generateCSV (se já existir, não duplique)
-function generateCSV(transactions) {
-  const headers = 'Data,Descrição,Categoria,Tipo,Valor\n';
-  
-  const rows = transactions.map(tx => {
-    const date = new Date(tx.date).toLocaleDateString('pt-BR');
-    const description = `"${tx.description || ''}"`;
-    const category = tx.category;
-    const type = tx.type === 'income' ? 'Receita' : 'Despesa';
-    const value = tx.value.toFixed(2).replace('.', ',');
-    
-    return `${date},${description},${category},${type},${value}`;
-  }).join('\n');
+const PORT = process.env.PORT || 3000;
 
-  return headers + rows;
-}
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+  console.log(`📊 Sistema de controle financeiro pessoal`);
+  console.log(`🌐 CORS habilitado para: http://localhost:5173`);
+  // ... outras importações
+const layoutRoutes = require('./routes/layout');
 
-// ✅ MANTENHA SEU EXPORT PARA VERCEL
-module.exports = app;
+// ... outro código
 
-// ✅ MANTENHA SEU SERVIDOR LOCAL
-if (require.main === module) {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`📊 Sistema de controle financeiro pessoal`);
-    console.log(`🔐 SEGURANÇA: Filtro por userId implementado`);
-    console.log(`🌐 CORS habilitado`);
-    console.log(`📤 Rota de exportação disponível: GET /transactions/export`);
-  });
-}
+// Rotas protegidas
+app.use('/transactions', transactionRoutes);
+app.use('/summary', summaryRoutes);
+app.use('/layout', layoutRoutes); // ← Adicione esta linha
+
+// ... resto do código
+});
