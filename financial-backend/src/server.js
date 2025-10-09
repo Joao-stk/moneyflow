@@ -21,11 +21,12 @@ app.use(cors({
     'http://localhost:5173',
     'https://finfly.vercel.app',
     'https://finfly-git-main-joao-stks-projects.vercel.app',
+    'https://finfly-git-develop-joao-stks-projects.vercel.app',
     process.env.FRONTEND_URL
   ].filter(Boolean),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(express.json());
@@ -39,11 +40,11 @@ app.use('/auth', authRoutes);
 // Middleware de autenticação para rotas protegidas
 app.use(authMiddleware);
 
-// ✅ CORREÇÃO: Rota de exportação DEPOIS do authMiddleware
+// Rota de exportação
 app.get('/transactions/export', async (req, res) => {
   try {
     const { type = 'csv', range = 'all', startDate, endDate } = req.query;
-    const userId = req.user.id; // ✅ AGORA req.user existe!
+    const userId = req.user.id;
 
     console.log('📤 Export request:', { type, range, userId });
 
@@ -108,25 +109,23 @@ app.get('/transactions/export', async (req, res) => {
   }
 });
 
-// ✅✅✅ FIM DA PARTE PARA COLE - MANTENHA O RESTO DO SEU CÓDIGO ✅✅✅
-
-// ✅ MANTENHA SUAS ROTAS EXISTENTES
+// Rotas protegidas
 app.use('/transactions', transactionRoutes);
 app.use('/summary', summaryRoutes);
-app.use('/layout', layoutRoutes); // ← Adicione esta linha
+app.use('/layout', layoutRoutes);
 
-// ✅ MANTENHA SUA ROTA DE SAÚDE
+// Rota de saúde
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Servidor funcionando!' });
 });
 
-// ✅ MANTENHA SEU MIDDLEWARE DE ERROS
+// Middleware de tratamento de erros
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Erro interno do servidor' });
 });
 
-// ✅ MANTENHA SUA ROTA NÃO ENCONTRADA
+// Rota não encontrada
 app.use('*', (req, res) => {
   res.status(404).json({ 
     error: 'Rota não encontrada',
@@ -135,7 +134,7 @@ app.use('*', (req, res) => {
       'GET /health',
       'POST /auth/register',
       'POST /auth/login',
-      'GET /transactions/export', // ✅ ADICIONADA AQUI
+      'GET /transactions/export',
       'GET /transactions',
       'POST /transactions', 
       'DELETE /transactions/:id',
@@ -163,10 +162,10 @@ function generateCSV(transactions) {
   return headers + rows;
 }
 
-// ✅ EXPORT para Vercel
+// Export para Vercel
 module.exports = app;
 
-// ✅ Para desenvolvimento local
+// Para desenvolvimento local
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
