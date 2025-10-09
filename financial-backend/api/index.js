@@ -8,11 +8,24 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 
-// ✅ 1. CORS CONFIGURATION
+// ✅ 1. CORS CONFIGURATION CORRIGIDA
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://finfly.vercel.app',
+  'https://finfly-git-main-joao-stks-projects.vercel.app',
+  'https://finfly-git-develop-joao-stks-projects.vercel.app'
+];
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://finfly.vercel.app');
+  const origin = req.headers.origin;
+  
+  // ✅ Verifica se a origem está na lista de permitidas
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.header('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
