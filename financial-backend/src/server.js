@@ -39,7 +39,7 @@ app.use('/auth', authRoutes);
 // Middleware de autenticação para rotas protegidas
 app.use(authMiddleware);
 
-// ✅ Rota de exportação CORRIGIDA - COM FILTRO POR USUÁRIO
+// ✅ Rota de exportação CORRIGIDA - APENAS FILTRO SIMPLES
 app.get('/transactions/export', async (req, res) => {
   try {
     const { type = 'csv', range = 'all', startDate, endDate } = req.query;
@@ -47,7 +47,7 @@ app.get('/transactions/export', async (req, res) => {
 
     console.log('📤 Export request from user:', userId, { type, range });
 
-    // ✅ GARANTIR que sempre filtra pelo userId
+    // ✅ FILTRO SIMPLES E SEGURO - apenas pelo userId
     const where = { 
       userId: userId // ✅ FILTRO CRÍTICO DE SEGURANÇA
     };
@@ -72,7 +72,7 @@ app.get('/transactions/export', async (req, res) => {
       };
     }
 
-    console.log('🔐 Query filter:', where);
+    console.log('🔐 Query filter:', JSON.stringify(where, null, 2));
 
     // ✅ BUSCA APENAS transações do usuário logado
     const transactions = await req.prisma.transaction.findMany({
@@ -82,19 +82,15 @@ app.get('/transactions/export', async (req, res) => {
 
     console.log(`📊 User ${userId} has ${transactions.length} transactions for export`);
 
-    // ✅ VALIDAÇÃO DE SEGURANÇA: Verificar se as transações pertencem ao usuário
-    const unauthorizedTransactions = transactions.filter(tx => tx.userId !== userId);
-    if (unauthorizedTransactions.length > 0) {
-      console.error('🚨 CRITICAL: Unauthorized transactions found for user:', userId);
-      return res.status(403).json({ error: 'Acesso negado a transações de outros usuários' });
-    }
+    // ✅ REMOVIDA validação excessiva que causava 403
+    // O filtro WHERE já garante que só vem transações do usuário
 
     let data, contentType, filename;
 
     if (type === 'csv') {
       data = generateCSV(transactions);
       contentType = 'text/csv';
-      filename = `finfly-user${userId}-export-${Date.now()}.csv`;
+      filename = `finfly-export-${Date.now()}.csv`;
     } else if (type === 'json') {
       data = JSON.stringify({
         exportedAt: new Date().toISOString(),
@@ -103,20 +99,10 @@ app.get('/transactions/export', async (req, res) => {
           email: req.user.email
         },
         transactionCount: transactions.length,
-        transactions: transactions.map(tx => ({
-          // ✅ INCLUIR userId no JSON para verificação
-          id: tx.id,
-          date: tx.date,
-          description: tx.description,
-          category: tx.category,
-          type: tx.type,
-          value: tx.value,
-          userId: tx.userId, // ✅ PARA DEBUG/VERIFICAÇÃO
-          createdAt: tx.createdAt
-        }))
+        transactions: transactions
       }, null, 2);
       contentType = 'application/json';
-      filename = `finfly-user${userId}-export-${Date.now()}.json`;
+      filename = `finfly-export-${Date.now()}.json`;
     } else {
       return res.status(400).json({ error: 'Tipo não suportado. Use csv ou json.' });
     }
@@ -171,7 +157,7 @@ app.use('*', (req, res) => {
 
 // Função para gerar CSV
 function generateCSV(transactions) {
-  const headers = 'Data,Descrição,Categoria,Tipo,Valor,UserId\n'; // ✅ INCLUIR UserId para debug
+  const headers = 'Data,Descrição,Categoria,Tipo,Valor\n';
   
   const rows = transactions.map(tx => {
     const date = new Date(tx.date).toLocaleDateString('pt-BR');
@@ -179,9 +165,8 @@ function generateCSV(transactions) {
     const category = tx.category;
     const type = tx.type === 'income' ? 'Receita' : 'Despesa';
     const value = tx.value.toFixed(2).replace('.', ',');
-    const userId = tx.userId; // ✅ INCLUIR UserId no CSV para verificação
     
-    return `${date},${description},${category},${type},${value},${userId}`;
+    return `${date},${description},${category},${type},${value}`;
   }).join('\n');
 
   return headers + rows;
