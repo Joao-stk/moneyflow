@@ -28,7 +28,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-
+app.options('*', cors()); // ⬅️ LINHA CRÍTICA QUE FALTA
 app.use(express.json());
 
 // Injeta prisma em todas as rotas
