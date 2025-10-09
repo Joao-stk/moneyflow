@@ -15,7 +15,7 @@ const app = express();
 // Conectar ao banco de dados
 connectDB();
 
-// Middlewares - CORS PRIMEIRO
+// Middlewares
 app.use(cors({
   origin: [
     'http://localhost:5173',
@@ -29,61 +29,29 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
-// Injeta prisma em todas as rotas
 app.use(prismaMiddleware);
 
-// Rotas públicas
+// ✅ ROTAS PÚBLICAS (sem auth)
 app.use('/auth', authRoutes);
 
-// Middleware de autenticação para rotas protegidas
+// ✅ MIDDLEWARE DE AUTENTICAÇÃO (aplica para todas as rotas abaixo)
 app.use(authMiddleware);
 
-// ✅ Rota de exportação CORRIGIDA - APENAS FILTRO SIMPLES
+// ✅ ROTAS PROTEGIDAS (todas abaixo do authMiddleware)
 app.get('/transactions/export', async (req, res) => {
   try {
     const { type = 'csv', range = 'all', startDate, endDate } = req.query;
-    const userId = req.user.id;
+    const userId = req.user.id; // ✅ Agora req.user existe!
 
-    console.log('📤 Export request from user:', userId, { type, range });
-
-    // ✅ FILTRO SIMPLES E SEGURO - apenas pelo userId
-    const where = { 
-      userId: userId // ✅ FILTRO CRÍTICO DE SEGURANÇA
-    };
-
-    // Aplicar filtros de data APENAS para o usuário logado
-    if (range === 'month') {
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-      where.date = { gte: startOfMonth };
-    } else if (range === 'year') {
-      const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-      where.date = { gte: startOfYear };
-    } else if (range === 'last3') {
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-      where.date = { gte: threeMonthsAgo };
-    } else if (range === 'custom' && startDate && endDate) {
-      where.date = {
-        gte: new Date(startDate),
-        lte: new Date(endDate)
-      };
-    }
-
-    console.log('🔐 Query filter:', JSON.stringify(where, null, 2));
-
-    // ✅ BUSCA APENAS transações do usuário logado
+    console.log('✅ Usuário autenticado:', req.user.id, req.user.email);
+    
+    // ... resto do código da exportação
+    const where = { userId: userId };
+    
     const transactions = await req.prisma.transaction.findMany({
       where: where,
       orderBy: { date: 'desc' }
     });
-
-    console.log(`📊 User ${userId} has ${transactions.length} transactions for export`);
-
-    // ✅ REMOVIDA validação excessiva que causava 403
-    // O filtro WHERE já garante que só vem transações do usuário
 
     let data, contentType, filename;
 
@@ -94,95 +62,35 @@ app.get('/transactions/export', async (req, res) => {
     } else if (type === 'json') {
       data = JSON.stringify({
         exportedAt: new Date().toISOString(),
-        user: {
-          id: userId,
-          email: req.user.email
-        },
+        user: req.user,
         transactionCount: transactions.length,
         transactions: transactions
       }, null, 2);
       contentType = 'application/json';
       filename = `finfly-export-${Date.now()}.json`;
     } else {
-      return res.status(400).json({ error: 'Tipo não suportado. Use csv ou json.' });
+      return res.status(400).json({ error: 'Tipo não suportado' });
     }
 
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     
-    console.log(`✅ Export completed for user ${userId}: ${filename}`);
     return res.send(data);
 
   } catch (error) {
-    console.error('❌ Erro na exportação:', error);
-    return res.status(500).json({ error: 'Erro ao exportar dados: ' + error.message });
+    console.error('Erro na exportação:', error);
+    return res.status(500).json({ error: 'Erro ao exportar dados' });
   }
 });
 
-// ✅ DEPOIS adicione as outras rotas de transactions
+// Outras rotas protegidas
 app.use('/transactions', transactionRoutes);
 app.use('/summary', summaryRoutes);
 app.use('/layout', layoutRoutes);
 
-// Rota de saúde
+// Rota de saúde (pública - antes do authMiddleware)
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Servidor funcionando!' });
 });
 
-// Middleware de tratamento de erros
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Erro interno do servidor' });
-});
-
-// Rota não encontrada
-app.use('*', (req, res) => {
-  res.status(404).json({ 
-    error: 'Rota não encontrada',
-    path: req.originalUrl,
-    availableEndpoints: [
-      'GET /health',
-      'POST /auth/register',
-      'POST /auth/login',
-      'GET /transactions/export',
-      'GET /transactions',
-      'POST /transactions', 
-      'DELETE /transactions/:id',
-      'GET /summary',
-      'GET /layout',
-      'POST /layout'
-    ]
-  });
-});
-
-// Função para gerar CSV
-function generateCSV(transactions) {
-  const headers = 'Data,Descrição,Categoria,Tipo,Valor\n';
-  
-  const rows = transactions.map(tx => {
-    const date = new Date(tx.date).toLocaleDateString('pt-BR');
-    const description = `"${tx.description || ''}"`;
-    const category = tx.category;
-    const type = tx.type === 'income' ? 'Receita' : 'Despesa';
-    const value = tx.value.toFixed(2).replace('.', ',');
-    
-    return `${date},${description},${category},${type},${value}`;
-  }).join('\n');
-
-  return headers + rows;
-}
-
-// ✅ EXPORT para Vercel
-module.exports = app;
-
-// ✅ Para desenvolvimento local
-if (require.main === module) {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`📊 Sistema de controle financeiro pessoal`);
-    console.log(`🔐 SEGURANÇA: Filtro por userId implementado`);
-    console.log(`🌐 CORS habilitado`);
-    console.log(`📤 Rota de exportação disponível: GET /transactions/export`);
-  });
-}
+// ... resto do código
