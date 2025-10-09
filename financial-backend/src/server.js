@@ -39,18 +39,16 @@ app.use('/auth', authRoutes);
 // Middleware de autenticação para rotas protegidas
 app.use(authMiddleware);
 
-// ✅✅✅ APENAS ESTA ROTA ESPECÍFICA - COLE APENAS ESTA PARTE ✅✅✅
+// ✅ CORREÇÃO: Rota de exportação DEPOIS do authMiddleware
 app.get('/transactions/export', async (req, res) => {
   try {
     const { type = 'csv', range = 'all', startDate, endDate } = req.query;
-    const userId = req.user.id;
+    const userId = req.user.id; // ✅ AGORA req.user existe!
 
-    console.log('📤 Export request from user:', userId, { type, range });
+    console.log('📤 Export request:', { type, range, userId });
 
-    // ✅ FILTRO SEGURO - apenas pelo userId
-    const where = { 
-      userId: userId
-    };
+    // Buscar transações do usuário
+    const where = { userId: userId };
 
     // Aplicar filtros de data
     if (range === 'month') {
@@ -72,15 +70,12 @@ app.get('/transactions/export', async (req, res) => {
       };
     }
 
-    console.log('🔐 Query filter:', JSON.stringify(where, null, 2));
-
-    // Buscar transações do usuário
     const transactions = await req.prisma.transaction.findMany({
       where: where,
       orderBy: { date: 'desc' }
     });
 
-    console.log(`📊 User ${userId} has ${transactions.length} transactions for export`);
+    console.log(`📊 Found ${transactions.length} transactions for export`);
 
     let data, contentType, filename;
 
@@ -91,10 +86,7 @@ app.get('/transactions/export', async (req, res) => {
     } else if (type === 'json') {
       data = JSON.stringify({
         exportedAt: new Date().toISOString(),
-        user: {
-          id: userId,
-          email: req.user.email
-        },
+        user: req.user.email,
         transactionCount: transactions.length,
         transactions: transactions
       }, null, 2);
@@ -107,7 +99,7 @@ app.get('/transactions/export', async (req, res) => {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     
-    console.log(`✅ Export completed for user ${userId}: ${filename}`);
+    console.log(`✅ Export completed: ${filename}`);
     return res.send(data);
 
   } catch (error) {
@@ -154,21 +146,33 @@ app.use('*', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+// Função para gerar CSV
+function generateCSV(transactions) {
+  const headers = 'Data,Descrição,Categoria,Tipo,Valor\n';
+  
+  const rows = transactions.map(tx => {
+    const date = new Date(tx.date).toLocaleDateString('pt-BR');
+    const description = `"${tx.description || ''}"`;
+    const category = tx.category;
+    const type = tx.type === 'income' ? 'Receita' : 'Despesa';
+    const value = tx.value.toFixed(2).replace('.', ',');
+    
+    return `${date},${description},${category},${type},${value}`;
+  }).join('\n');
 
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📊 Sistema de controle financeiro pessoal`);
-  console.log(`🌐 CORS habilitado para: http://localhost:5173`);
-  // ... outras importações
-const layoutRoutes = require('./routes/layout');
+  return headers + rows;
+}
 
-// ... outro código
+// ✅ EXPORT para Vercel
+module.exports = app;
 
-// Rotas protegidas
-app.use('/transactions', transactionRoutes);
-app.use('/summary', summaryRoutes);
-app.use('/layout', layoutRoutes); // ← Adicione esta linha
-
-// ... resto do código
-});
+// ✅ Para desenvolvimento local
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`📊 Sistema de controle financeiro pessoal`);
+    console.log(`🌐 CORS habilitado`);
+    console.log(`📤 Rota de exportação disponível: GET /transactions/export`);
+  });
+}
