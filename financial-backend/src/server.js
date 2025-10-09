@@ -9,6 +9,7 @@ const transactionRoutes = require('./routes/transactions');
 const summaryRoutes = require('./routes/summary');
 const authMiddleware = require('./middlewares/auth');
 const layoutRoutes = require('./routes/layout');
+const exportRoutes = require('./routes/export'); // ✅ NOVA IMPORT
 
 const app = express();
 
@@ -28,7 +29,10 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-app.options('*', cors()); // ⬅️ LINHA CRÍTICA QUE FALTA
+
+// ✅ ADICIONE PARA PREFLIGHT
+app.options('*', cors());
+
 app.use(express.json());
 
 // Injeta prisma em todas as rotas
@@ -44,6 +48,7 @@ app.use(authMiddleware);
 app.use('/transactions', transactionRoutes);
 app.use('/summary', summaryRoutes);
 app.use('/layout', layoutRoutes);
+app.use('/export', exportRoutes); // ✅ NOVA ROTA
 
 // Rota de saúde
 app.get('/health', (req, res) => {
@@ -70,7 +75,8 @@ app.use('*', (req, res) => {
       'DELETE /transactions/:id',
       'GET /summary',
       'GET /layout',
-      'POST /layout'
+      'POST /layout',
+      'GET /export' // ✅ ADICIONADA
     ]
   });
 });
@@ -85,5 +91,6 @@ if (require.main === module) {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
     console.log(`📊 Sistema de controle financeiro pessoal`);
     console.log(`🌐 CORS habilitado`);
+    console.log(`📤 Rota de exportação: GET /export`);
   });
 }

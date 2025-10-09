@@ -61,5 +61,16 @@ export const layoutAPI = {
   getLayout: () => 
     api.get('/layout'),
 }
+export const exportAPI = {
+  exportData: ({ type = 'json', range = 'all', startDate, endDate }) => {
+    const params = {
+      type,
+      range,
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate })
+    };
 
+    return api.get('/export', { params });
+  }
+};
 export default api

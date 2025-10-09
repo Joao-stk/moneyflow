@@ -250,7 +250,6 @@ function Transactions() {
                   display: 'block',
                   marginTop: '5px'
                 }}>
-                  Máximo: {new Date().toLocaleDateString('pt-BR')}
                 </small>
               </div>
             </div>
