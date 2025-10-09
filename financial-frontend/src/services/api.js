@@ -72,5 +72,5 @@ export const exportAPI = {
 
     return api.get('/export', { params });
   }
-};
+}
 export default api
